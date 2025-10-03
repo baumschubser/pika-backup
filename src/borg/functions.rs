@@ -322,6 +322,19 @@ impl CommandRun<task::UserScript> for Command<task::UserScript> {
                     run_info,
                 )
             }
+            UserScriptKind::PostPrune => {
+                let Some(run_info) = self.task.run_info() else {
+                    return Err(Error::from(
+                        "The UserScript task RunInfo wasn't set".to_string(),
+                    ));
+                };
+
+                super::scripts::script_env_post(
+                    &self.config,
+                    self.from_schedule.is_some(),
+                    run_info,
+                )
+            }
         };
 
         super::scripts::run_script(script, env, kind, self.communication).await
