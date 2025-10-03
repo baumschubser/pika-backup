@@ -156,7 +156,18 @@ impl imp::BackupPage {
                             .run_prune(current_config.clone(), from_schedule.clone(), guard)
                             .await
                         {
-                            Ok(false) => return Ok(()),
+                            Ok(false) => {
+                                self.run_script(
+                                    UserScriptKind::PostPrune,
+                                    config.clone(),
+                                    from_schedule.clone(),
+                                    Some(run_info.clone()),
+                                    guard,
+                                )
+                                .await?;
+
+                                return Ok(());
+                            },
                             Err(err) => return Err(err),
                             _ => {}
                         };

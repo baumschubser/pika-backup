@@ -279,6 +279,10 @@ pub async fn run_script(
                         "The post-backup command configured in preferences failed to run.\n{}",
                         &[&format!("{:?}", e)],
                     )),
+                    UserScriptKind::PostPrune => Error::from(gettextf(
+                        "The post-prune command configured in preferences failed to run.\n{}",
+                        &[&format!("{:?}", e)],
+                    )),
                 }
             }
         })?;
@@ -307,6 +311,10 @@ pub async fn run_script(
             ),
             UserScriptKind::PostBackup => gettextf(
                 "The post-backup command configured in preferences returned a failure code: {}",
+                &[&return_code.to_string()],
+            ),
+            UserScriptKind::PostPrune => gettextf(
+                "The post-prune command configured in preferences returned a failure code: {}",
                 &[&return_code.to_string()],
             ),
         };

@@ -30,6 +30,7 @@ mod imp {
         command_line_args_error: RefCell<Option<crate::ui::error::Error>>,
         pre_backup_command_error: RefCell<Option<crate::ui::error::Error>>,
         post_backup_command_error: RefCell<Option<crate::ui::error::Error>>,
+        post_prune_command_error: RefCell<Option<crate::ui::error::Error>>,
 
         script_running: Cell<bool>,
         script_communication:
@@ -44,7 +45,11 @@ mod imp {
         #[template_child]
         post_backup_command_test_button: TemplateChild<gtk::Button>,
         #[template_child]
+        post_prune_command_test_button: TemplateChild<gtk::Button>,
+        #[template_child]
         post_backup_command_entry: TemplateChild<adw::EntryRow>,
+        #[template_child]
+        post_prune_command_entry: TemplateChild<adw::EntryRow>,
         #[template_child]
         shell_commands_detail: TemplateChild<gtk::Label>,
 
@@ -54,6 +59,8 @@ mod imp {
         pre_backup_command: RefCell<String>,
         #[property(get, set = Self::set_post_backup_command)]
         post_backup_command: RefCell<String>,
+        #[property(get, set = Self::set_post_prune_command)]
+        post_prune_command: RefCell<String>,
 
         // Tweaks
         #[property(get, set)]
@@ -151,6 +158,13 @@ mod imp {
                             obj.imp().post_backup_command_error.replace(Some(err));
                         }
                     });
+                } else if imp.post_prune_command_error.borrow().is_some() {
+                    glib::MainContext::default().spawn_local(async move {
+                        if let Some(err) = obj.imp().post_prune_command_error.take() {
+                            err.show().await;
+                            obj.imp().post_prune_command_error.replace(Some(err));
+                        }
+                    });
                 } else {
                     obj.force_close();
                 }
@@ -195,6 +209,15 @@ mod imp {
                         backup.user_scripts.remove(&UserScriptKind::PostBackup);
                     }
 
+                    if !self.post_prune_command.borrow().is_empty() {
+                        backup.user_scripts.insert(
+                            UserScriptKind::PostPrune,
+                            self.post_prune_command.borrow().clone(),
+                        );
+                    } else {
+                        backup.user_scripts.remove(&UserScriptKind::PostPrune);
+                    }
+
                     backup.repo.set_settings(Some(BackupSettings {
                         command_line_args: self.command_line_args.borrow().clone(),
                     }));
@@ -223,6 +246,13 @@ mod imp {
                         backup
                             .user_scripts
                             .get(&UserScriptKind::PostBackup)
+                            .cloned()
+                            .unwrap_or_default(),
+                    );
+                    self.obj().set_post_prune_command(
+                        backup
+                            .user_scripts
+                            .get(&UserScriptKind::PostPrune)
                             .cloned()
                             .unwrap_or_default(),
                     );
@@ -305,6 +335,21 @@ mod imp {
                 }
             }
         }
+        
+        fn set_post_prune_command(&self, command: String) {
+            match Self::validate_shell_command(&command) {
+                Ok(_) => {
+                    self.post_prune_command_entry.remove_css_class("error");
+                    self.post_prune_command.replace(command);
+                    self.post_prune_command_error.replace(None);
+                }
+                Err(err) => {
+                    self.post_prune_command.replace(String::new());
+                    self.post_prune_command_entry.add_css_class("error");
+                    self.post_prune_command_error.replace(Some(err));
+                }
+            }
+        }
 
         async fn test_run_script(
             &self,
@@ -319,10 +364,18 @@ mod imp {
                     self.pre_backup_command_test_button
                         .set_icon_name("stop-large-symbolic");
                     self.post_backup_command_test_button.set_sensitive(false);
+                    self.post_prune_command_test_button.set_sensitive(false);
                 }
                 UserScriptKind::PostBackup => {
                     self.pre_backup_command_test_button.set_sensitive(false);
+                    self.post_prune_command_test_button.set_sensitive(false);
                     self.post_backup_command_test_button
+                        .set_icon_name("stop-large-symbolic");
+                }
+                UserScriptKind::PostPrune => {
+                    self.pre_backup_command_test_button.set_sensitive(false);
+                    self.post_backup_command_test_button.set_sensitive(false);
+                    self.post_prune_command_test_button
                         .set_icon_name("stop-large-symbolic");
                 }
             }
@@ -345,10 +398,18 @@ mod imp {
                     self.pre_backup_command_test_button
                         .set_icon_name("play-large-symbolic");
                     self.post_backup_command_test_button.set_sensitive(true);
+                    self.post_prune_command_test_button.set_sensitive(true);
                 }
                 UserScriptKind::PostBackup => {
                     self.pre_backup_command_test_button.set_sensitive(true);
+                    self.post_prune_command_test_button.set_sensitive(true);
                     self.post_backup_command_test_button
+                        .set_icon_name("play-large-symbolic");
+                }
+                UserScriptKind::PostPrune => {
+                    self.pre_backup_command_test_button.set_sensitive(true);
+                    self.post_backup_command_test_button.set_sensitive(true);
+                    self.post_prune_command_test_button
                         .set_icon_name("play-large-symbolic");
                 }
             }
@@ -422,6 +483,46 @@ mod imp {
                         .insert(UserScriptKind::PostBackup, command);
 
                     self.test_run_script(UserScriptKind::PostBackup, config, Some(run_info))
+                        .await;
+                }
+            }
+        }
+        
+        #[template_callback]
+        async fn test_post_prune_command(&self) {
+            if self.script_running.get() {
+                self.abort_test_run_script().await;
+                return;
+            }
+
+            let command = self.obj().post_prune_command();
+
+            if !command.is_empty() {
+                if let Ok(mut config) = self.config() {
+                    // Check if there is already a last RunInfo, if so, use that one
+                    let run_info = if let Some(run_info) = BACKUP_HISTORY
+                        .load()
+                        .try_get(self.config_id.get().unwrap())
+                        .ok()
+                        .and_then(|history| history.last_completed())
+                    {
+                        run_info.clone()
+                    } else {
+                        // Create one from scratch with random values
+                        crate::config::history::RunInfo::new(
+                            &config,
+                            crate::borg::Outcome::Completed {
+                                stats: crate::borg::Stats::new_example(),
+                            },
+                            Default::default(),
+                        )
+                    };
+
+                    config
+                        .user_scripts
+                        .insert(UserScriptKind::PostPrune, command);
+
+                    self.test_run_script(UserScriptKind::PostPrune, config, Some(run_info))
                         .await;
                 }
             }
