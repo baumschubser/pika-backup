@@ -30,7 +30,7 @@ mod imp {
         command_line_args_error: RefCell<Option<crate::ui::error::Error>>,
         pre_backup_command_error: RefCell<Option<crate::ui::error::Error>>,
         post_backup_command_error: RefCell<Option<crate::ui::error::Error>>,
-        post_prune_command_error: RefCell<Option<crate::ui::error::Error>>,
+        post_everything_command_error: RefCell<Option<crate::ui::error::Error>>,
 
         script_running: Cell<bool>,
         script_communication:
@@ -45,11 +45,11 @@ mod imp {
         #[template_child]
         post_backup_command_test_button: TemplateChild<gtk::Button>,
         #[template_child]
-        post_prune_command_test_button: TemplateChild<gtk::Button>,
+        post_everything_command_test_button: TemplateChild<gtk::Button>,
         #[template_child]
         post_backup_command_entry: TemplateChild<adw::EntryRow>,
         #[template_child]
-        post_prune_command_entry: TemplateChild<adw::EntryRow>,
+        post_everything_command_entry: TemplateChild<adw::EntryRow>,
         #[template_child]
         shell_commands_detail: TemplateChild<gtk::Label>,
 
@@ -59,8 +59,8 @@ mod imp {
         pre_backup_command: RefCell<String>,
         #[property(get, set = Self::set_post_backup_command)]
         post_backup_command: RefCell<String>,
-        #[property(get, set = Self::set_post_prune_command)]
-        post_prune_command: RefCell<String>,
+        #[property(get, set = Self::set_post_everything_command)]
+        post_everything_command: RefCell<String>,
 
         // Tweaks
         #[property(get, set)]
@@ -158,11 +158,11 @@ mod imp {
                             obj.imp().post_backup_command_error.replace(Some(err));
                         }
                     });
-                } else if imp.post_prune_command_error.borrow().is_some() {
+                } else if imp.post_everything_command_error.borrow().is_some() {
                     glib::MainContext::default().spawn_local(async move {
-                        if let Some(err) = obj.imp().post_prune_command_error.take() {
+                        if let Some(err) = obj.imp().post_everything_command_error.take() {
                             err.show().await;
-                            obj.imp().post_prune_command_error.replace(Some(err));
+                            obj.imp().post_everything_command_error.replace(Some(err));
                         }
                     });
                 } else {
@@ -209,13 +209,13 @@ mod imp {
                         backup.user_scripts.remove(&UserScriptKind::PostBackup);
                     }
 
-                    if !self.post_prune_command.borrow().is_empty() {
+                    if !self.post_everything_command.borrow().is_empty() {
                         backup.user_scripts.insert(
-                            UserScriptKind::PostPrune,
-                            self.post_prune_command.borrow().clone(),
+                            UserScriptKind::PostEverything,
+                            self.post_everything_command.borrow().clone(),
                         );
                     } else {
-                        backup.user_scripts.remove(&UserScriptKind::PostPrune);
+                        backup.user_scripts.remove(&UserScriptKind::PostEverything);
                     }
 
                     backup.repo.set_settings(Some(BackupSettings {
@@ -249,10 +249,10 @@ mod imp {
                             .cloned()
                             .unwrap_or_default(),
                     );
-                    self.obj().set_post_prune_command(
+                    self.obj().set_post_everything_command(
                         backup
                             .user_scripts
-                            .get(&UserScriptKind::PostPrune)
+                            .get(&UserScriptKind::PostEverything)
                             .cloned()
                             .unwrap_or_default(),
                     );
@@ -336,17 +336,17 @@ mod imp {
             }
         }
         
-        fn set_post_prune_command(&self, command: String) {
+        fn set_post_everything_command(&self, command: String) {
             match Self::validate_shell_command(&command) {
                 Ok(_) => {
-                    self.post_prune_command_entry.remove_css_class("error");
-                    self.post_prune_command.replace(command);
-                    self.post_prune_command_error.replace(None);
+                    self.post_everything_command_entry.remove_css_class("error");
+                    self.post_everything_command.replace(command);
+                    self.post_everything_command_error.replace(None);
                 }
                 Err(err) => {
-                    self.post_prune_command.replace(String::new());
-                    self.post_prune_command_entry.add_css_class("error");
-                    self.post_prune_command_error.replace(Some(err));
+                    self.post_everything_command.replace(String::new());
+                    self.post_everything_command_entry.add_css_class("error");
+                    self.post_everything_command_error.replace(Some(err));
                 }
             }
         }
@@ -364,18 +364,18 @@ mod imp {
                     self.pre_backup_command_test_button
                         .set_icon_name("stop-large-symbolic");
                     self.post_backup_command_test_button.set_sensitive(false);
-                    self.post_prune_command_test_button.set_sensitive(false);
+                    self.post_everything_command_test_button.set_sensitive(false);
                 }
                 UserScriptKind::PostBackup => {
                     self.pre_backup_command_test_button.set_sensitive(false);
-                    self.post_prune_command_test_button.set_sensitive(false);
+                    self.post_everything_command_test_button.set_sensitive(false);
                     self.post_backup_command_test_button
                         .set_icon_name("stop-large-symbolic");
                 }
-                UserScriptKind::PostPrune => {
+                UserScriptKind::PostEverything => {
                     self.pre_backup_command_test_button.set_sensitive(false);
                     self.post_backup_command_test_button.set_sensitive(false);
-                    self.post_prune_command_test_button
+                    self.post_everything_command_test_button
                         .set_icon_name("stop-large-symbolic");
                 }
             }
@@ -398,18 +398,18 @@ mod imp {
                     self.pre_backup_command_test_button
                         .set_icon_name("play-large-symbolic");
                     self.post_backup_command_test_button.set_sensitive(true);
-                    self.post_prune_command_test_button.set_sensitive(true);
+                    self.post_everything_command_test_button.set_sensitive(true);
                 }
                 UserScriptKind::PostBackup => {
                     self.pre_backup_command_test_button.set_sensitive(true);
-                    self.post_prune_command_test_button.set_sensitive(true);
+                    self.post_everything_command_test_button.set_sensitive(true);
                     self.post_backup_command_test_button
                         .set_icon_name("play-large-symbolic");
                 }
-                UserScriptKind::PostPrune => {
+                UserScriptKind::PostEverything => {
                     self.pre_backup_command_test_button.set_sensitive(true);
                     self.post_backup_command_test_button.set_sensitive(true);
-                    self.post_prune_command_test_button
+                    self.post_everything_command_test_button
                         .set_icon_name("play-large-symbolic");
                 }
             }
@@ -489,13 +489,13 @@ mod imp {
         }
         
         #[template_callback]
-        async fn test_post_prune_command(&self) {
+        async fn test_post_everything_command(&self) {
             if self.script_running.get() {
                 self.abort_test_run_script().await;
                 return;
             }
 
-            let command = self.obj().post_prune_command();
+            let command = self.obj().post_everything_command();
 
             if !command.is_empty() {
                 if let Ok(mut config) = self.config() {
@@ -520,9 +520,9 @@ mod imp {
 
                     config
                         .user_scripts
-                        .insert(UserScriptKind::PostPrune, command);
+                        .insert(UserScriptKind::PostEverything, command);
 
-                    self.test_run_script(UserScriptKind::PostPrune, config, Some(run_info))
+                    self.test_run_script(UserScriptKind::PostEverything, config, Some(run_info))
                         .await;
                 }
             }

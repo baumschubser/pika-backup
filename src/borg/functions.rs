@@ -322,7 +322,7 @@ impl CommandRun<task::UserScript> for Command<task::UserScript> {
                     run_info,
                 )
             }
-            UserScriptKind::PostPrune => {
+            UserScriptKind::PostEverything => {
                 let Some(run_info) = self.task.run_info() else {
                     return Err(Error::from(
                         "The UserScript task RunInfo wasn't set".to_string(),

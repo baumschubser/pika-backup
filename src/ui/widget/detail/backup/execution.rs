@@ -156,18 +156,7 @@ impl imp::BackupPage {
                             .run_prune(current_config.clone(), from_schedule.clone(), guard)
                             .await
                         {
-                            Ok(false) => {
-                                self.run_script(
-                                    UserScriptKind::PostPrune,
-                                    config.clone(),
-                                    from_schedule.clone(),
-                                    Some(run_info.clone()),
-                                    guard,
-                                )
-                                .await?;
-
-                                return Ok(());
-                            },
+                            Ok(false) => return Ok(()),
                             Err(err) => return Err(err),
                             _ => {}
                         };
@@ -177,7 +166,7 @@ impl imp::BackupPage {
                 let _ignore = main_ui()
                     .page_detail()
                     .archives_page()
-                    .refresh_archives(config.clone(), from_schedule)
+                    .refresh_archives(config.clone(), from_schedule.clone())
                     .await;
                 let _ignore = ui::utils::df::lookup_and_cache(&config).await;
 
@@ -191,6 +180,14 @@ impl imp::BackupPage {
                     )
                     .into())
                 } else {
+                    self.run_script(
+                        UserScriptKind::PostEverything,
+                        config.clone(),
+                        from_schedule,
+                        Some(run_info.clone()),
+                        guard,
+                    )
+                    .await?;
                     Ok(())
                 }
             }

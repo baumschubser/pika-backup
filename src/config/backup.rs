@@ -65,7 +65,7 @@ impl StaticVariantType for ConfigId {
 pub enum UserScriptKind {
     PreBackup,
     PostBackup,
-    PostPrune,
+    PostEverything,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, glib::Boxed)]
