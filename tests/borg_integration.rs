@@ -4,12 +4,15 @@ pub use pika_backup::borg::CommandRun;
 #[macro_use]
 extern crate matches;
 
-use pika_backup::{borg, borg::prelude::*, config};
+use macro_rules_attribute::apply;
+use pika_backup::borg::prelude::*;
+use pika_backup::{borg, config};
+use smol_macros::test;
 
 // Currently, there are no init tasks
 fn init() {}
 
-#[async_std::test]
+#[apply(test!)]
 async fn simple_backup() {
     init();
 
@@ -23,7 +26,7 @@ async fn simple_backup() {
     assert_matches!(create.run().await, Ok(_));
 }
 
-#[async_std::test]
+#[apply(test!)]
 async fn backup_communication() -> borg::Result<()> {
     let config = config();
 
@@ -40,7 +43,7 @@ async fn backup_communication() -> borg::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[apply(test!)]
 async fn encrypted_backup() {
     init();
     let mut config = config();
@@ -59,7 +62,7 @@ async fn encrypted_backup() {
     assert!(result.is_err());
 }
 
-#[async_std::test]
+#[apply(test!)]
 async fn failed_ssh_connection() {
     init();
     let repo = config::remote::Repository::from_uri("ssh://backup.server.invalid/repo".to_string())
@@ -77,7 +80,7 @@ async fn failed_ssh_connection() {
 }
 
 // TODO: peek with what task
-#[async_std::test]
+#[apply(test!)]
 async fn failed_repo() {
     init();
     let result = borg::CommandOnlyRepo::new(config().repo).peek().await;

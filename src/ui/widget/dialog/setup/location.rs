@@ -1,30 +1,25 @@
-use crate::ui::prelude::*;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 
-use super::types::*;
 use super::SetupRepoLocation;
+use super::types::*;
+use crate::ui::prelude::*;
 use crate::ui::widget::DialogPage;
 
 mod imp {
-    use std::{
-        cell::{Cell, RefCell},
-        marker::PhantomData,
-        sync::OnceLock,
-    };
+    use std::cell::{Cell, RefCell};
+    use std::marker::PhantomData;
+    use std::sync::OnceLock;
 
     use gettextrs::gettext;
-    use glib::{subclass::Signal, WeakRef};
-
-    use crate::ui::{
-        error::HandleError,
-        widget::{
-            folder_row::FolderRow, setup::advanced_options::SetupAdvancedOptionsPage,
-            PkDialogPageImpl,
-        },
-    };
+    use glib::WeakRef;
+    use glib::subclass::Signal;
 
     use super::*;
+    use crate::ui::error::HandleError;
+    use crate::ui::widget::PkDialogPageImpl;
+    use crate::ui::widget::folder_row::FolderRow;
+    use crate::ui::widget::setup::advanced_options::SetupAdvancedOptionsPage;
 
     #[derive(Default, glib::Properties, gtk::CompositeTemplate)]
     #[template(file = "location.ui")]
@@ -93,12 +88,14 @@ mod imp {
         fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
             SIGNALS.get_or_init(|| {
-                vec![Signal::builder("continue")
-                    .param_types([
-                        SetupRepoLocation::static_type(),
-                        SetupCommandLineArgs::static_type(),
-                    ])
-                    .build()]
+                vec![
+                    Signal::builder("continue")
+                        .param_types([
+                            SetupRepoLocation::static_type(),
+                            SetupCommandLineArgs::static_type(),
+                        ])
+                        .build(),
+                ]
             })
         }
 
@@ -118,11 +115,11 @@ mod imp {
                 target.set_preload(true);
 
                 target.connect_value_notify(|target| {
-                    if let Some(value) = target.value() {
-                        if Self::path_to_network_uri(&value).is_some() {
-                            // we handle this
-                            return;
-                        }
+                    if let Some(value) = target.value()
+                        && Self::path_to_network_uri(&value).is_some()
+                    {
+                        // we handle this
+                        return;
                     }
 
                     target.reject();
@@ -217,12 +214,16 @@ mod imp {
                     .set_title(&gettext("Repository Folder"));
 
                 let mount_entry = gio::UnixMountEntry::for_file_path(path);
-                if let Some(fs) = mount_entry.0.map(|x| x.fs_type()) {
-                    debug!("Selected filesystem type {}", fs);
-                    self.non_journaling_warning
-                        .set_visible(crate::NON_JOURNALING_FILESYSTEMS.iter().any(|x| x == &fs));
-                } else {
-                    self.non_journaling_warning.set_visible(false);
+                match mount_entry.0.map(|x| x.fs_type()) {
+                    Some(fs) => {
+                        debug!("Selected filesystem type {}", fs);
+                        self.non_journaling_warning.set_visible(
+                            crate::NON_JOURNALING_FILESYSTEMS.iter().any(|x| x == &fs),
+                        );
+                    }
+                    _ => {
+                        self.non_journaling_warning.set_visible(false);
+                    }
                 }
             } else {
                 self.location_folder_row
@@ -348,7 +349,8 @@ mod imp {
                 });
             }
 
-            // Remote URL: If empty, only add error when not focused, to have a clean initial state
+            // Remote URL: If empty, only add error when not focused, to have a clean
+            // initial state
             if !valid
                 && kind == SetupLocationKind::Remote
                 && (!self.location_url.text().is_empty()
@@ -372,7 +374,8 @@ mod imp {
         }
 
         fn selected_location(&self) -> Result<SetupRepoLocation> {
-            // This might be called during template initialisation, make sure this uses try_get everywhere
+            // This might be called during template initialisation, make sure this uses
+            // try_get everywhere
             match self.location_kind.get() {
                 SetupLocationKind::Local => {
                     // We can only be here because we are creating a new repository

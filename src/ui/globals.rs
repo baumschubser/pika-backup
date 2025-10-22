@@ -1,17 +1,12 @@
-use crate::config;
-use crate::config::ConfigId;
-
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::rc::Rc;
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
 use arc_swap::ArcSwap;
-use std::sync::LazyLock;
-
-use crate::borg;
-use crate::ui;
 
 use super::app::App;
+use crate::config::ConfigId;
+use crate::{borg, config, ui};
 
 pub static BACKUP_CONFIG: LazyLock<ArcSwap<config::Writeable<config::Backups>>> =
     LazyLock::new(Default::default);
@@ -22,9 +17,6 @@ pub static SCHEDULE_STATUS: LazyLock<ArcSwap<config::ScheduleStatus>> =
     LazyLock::new(Default::default);
 
 pub static ACTIVE_BACKUP_ID: LazyLock<ArcSwap<Option<ConfigId>>> = LazyLock::new(Default::default);
-
-pub static ACTIVE_MOUNTS: LazyLock<ArcSwap<HashSet<borg::RepoId>>> =
-    LazyLock::new(Default::default);
 
 pub static BORG_VERSION: OnceLock<String> = OnceLock::new();
 

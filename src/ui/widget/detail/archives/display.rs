@@ -1,12 +1,10 @@
-use crate::ui::backup_status;
-use crate::ui::prelude::*;
-use crate::ui::App;
-
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 
 use super::imp;
+use crate::ui::prelude::*;
 use crate::ui::utils::repo_cache::RepoCache;
+use crate::ui::{App, backup_status};
 use crate::{borg, config, ui};
 
 impl imp::ArchivesPage {
@@ -60,7 +58,10 @@ impl imp::ArchivesPage {
             }
 
             if let Ok(config) = BACKUP_CONFIG.load().active() {
-                let is_mounted = ACTIVE_MOUNTS.load().contains(&config.repo_id);
+                let is_mounted = BACKUP_HISTORY
+                    .load()
+                    .browsing_repo_ids(&BACKUP_CONFIG.load())
+                    .contains(&config.repo_id);
                 self.eject_button.set_visible(is_mounted);
             }
         }
@@ -107,27 +108,27 @@ impl imp::ArchivesPage {
     }
 
     pub fn ui_update_archives_spinner(&self) {
-        if self.obj().is_visible() {
-            if let Ok(repo_id) = BACKUP_CONFIG.load().active().map(|x| &x.repo_id) {
-                let reloading = REPO_CACHE
-                    .load()
-                    .get(repo_id)
-                    .map(|x| x.reloading)
-                    .unwrap_or_default();
+        if self.obj().is_visible()
+            && let Ok(repo_id) = BACKUP_CONFIG.load().active().map(|x| &x.repo_id)
+        {
+            let reloading = REPO_CACHE
+                .load()
+                .get(repo_id)
+                .map(|x| x.reloading)
+                .unwrap_or_default();
 
-                if reloading {
-                    self.reloading_stack
-                        .set_visible_child(&*self.reloading_spinner);
-                } else {
-                    self.reloading_stack
-                        .set_visible_child(&*self.refresh_archives_button);
-                }
+            if reloading {
+                self.reloading_stack
+                    .set_visible_child(&*self.reloading_spinner);
+            } else {
+                self.reloading_stack
+                    .set_visible_child(&*self.refresh_archives_button);
             }
         }
     }
 
     pub async fn update_eject_button(&self) -> Result<()> {
-        ui::utils::borg::cleanup_mounts().await?;
+        ui::utils::borg::cleanup_repo_mounts().await;
         self.refresh_status();
         Ok(())
     }
@@ -255,9 +256,9 @@ impl imp::ArchivesPage {
 
         if let Some(df) = ui::utils::df::cached_or_lookup(config).await {
             self.location_suffix_title
-                .set_label(&gettextf("{} Available", &[&glib::format_size(df.avail)]));
+                .set_label(&gettextf("{} Available", [&glib::format_size(df.avail)]));
             self.location_suffix_subtitle
-                .set_label(&gettextf("{} Total", &[&glib::format_size(df.size)]));
+                .set_label(&gettextf("{} Total", [&glib::format_size(df.size)]));
 
             self.fs_usage
                 .set_value(1.0 - df.avail as f64 / df.size as f64);

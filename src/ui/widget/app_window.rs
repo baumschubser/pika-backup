@@ -1,15 +1,13 @@
-use crate::ui::prelude::*;
-use crate::ui::{self, App};
-
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 
 use super::detail::DetailPageKind;
 use super::{DetailPage, OverviewPage};
+use crate::ui::prelude::*;
+use crate::ui::{self, App};
 
 mod imp {
     use self::ui::widget::{DetailPage, OverviewPage};
-
     use super::*;
 
     #[derive(Default, gtk::CompositeTemplate)]
@@ -75,14 +73,13 @@ mod imp {
             // instead of the overview
             if self.navigation_view.visible_page().as_ref() == Some(self.page_overview.upcast_ref())
                 && BACKUP_CONFIG.load().iter().count() == 1
+                && let Some(config) = BACKUP_CONFIG.load().iter().next()
             {
-                if let Some(config) = BACKUP_CONFIG.load().iter().next() {
-                    self.navigation_view.replace(&[
-                        self.page_overview.clone().upcast(),
-                        self.page_detail.clone().upcast(),
-                    ]);
-                    self.obj().view_backup_conf(&config.id);
-                }
+                self.navigation_view.replace(&[
+                    self.page_overview.clone().upcast(),
+                    self.page_detail.clone().upcast(),
+                ]);
+                self.obj().view_backup_conf(&config.id);
             }
 
             Handler::run(ui::init_check_borg());
@@ -90,23 +87,21 @@ mod imp {
             // redo size estimates for backups running in background before
             BORG_OPERATION.with(|operations| {
                 for (config_id, operation) in operations.load().iter() {
-                    if let Some(create_op) = operation.try_as_create() {
-                        if create_op
+                    if let Some(create_op) = operation.try_as_create()
+                        && create_op
                             .communication()
                             .specific_info
                             .load()
                             .estimated_size
                             .is_none()
+                    {
+                        debug!("A running backup is lacking size estimate");
+                        if let Some(config) = BACKUP_CONFIG.load().try_get(config_id).ok().cloned()
                         {
-                            debug!("A running backup is lacking size estimate");
-                            if let Some(config) =
-                                BACKUP_CONFIG.load().try_get(config_id).ok().cloned()
-                            {
-                                let communication = create_op.communication().clone();
-                                glib::MainContext::default().spawn_local(async move {
-                                    ui::toast_size_estimate::check(&config, communication).await
-                                });
-                            }
+                            let communication = create_op.communication().clone();
+                            glib::MainContext::default().spawn_local(async move {
+                                ui::toast_size_estimate::check(&config, communication).await
+                            });
                         }
                     }
                 }

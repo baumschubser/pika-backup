@@ -1,22 +1,21 @@
-pub use crate::config::ConfigId;
-pub use crate::globals::*;
-pub use crate::utils::LookupConfigId;
 pub use std::convert::TryFrom;
 pub use std::rc::Rc;
 pub use std::sync::Arc;
 pub use std::time::Duration;
 
-use crate::config;
-
 use arc_swap::ArcSwap;
-
 pub use gettextrs::{gettext, ngettext};
 
-pub fn gettextf(format: &str, args: &[&str]) -> String {
+use crate::config;
+pub use crate::config::ConfigId;
+pub use crate::globals::*;
+pub use crate::utils::LookupConfigId;
+
+pub fn gettextf(format: &str, args: impl IntoIterator<Item = impl std::fmt::Display>) -> String {
     let mut s = gettext(format);
 
     for arg in args {
-        s = s.replacen("{}", arg, 1)
+        s = s.replacen("{}", &arg.to_string(), 1)
     }
     s
 }
@@ -74,7 +73,8 @@ impl<T> ArcSwapUpdateWriteable<T> for ArcSwap<config::Writeable<T>>
 where
     T: Clone,
 {
-    /// Update the inner value with the provided closure. Doesn't save the writeable.
+    /// Update the inner value with the provided closure. Doesn't save the
+    /// writeable.
     fn update_no_commit<F: Fn(&mut T)>(&self, updater: F) {
         self.rcu(|current| {
             let mut new = T::clone(&current.current_config);
@@ -147,7 +147,7 @@ macro_rules! trace {
 
 #[macro_export]
 macro_rules! generic {
-    ($suffix:tt, $level:expr, $($arg:tt)*) => ({
+    ($suffix:tt, $level:expr_2021, $($arg:tt)*) => ({
         let domain = env!("CARGO_PKG_NAME").to_string() + $suffix;
         glib::g_log!(domain.as_str(), $level, "{}:{}:0: {}", file!(), line!(), format!($($arg)+))
     })
@@ -155,7 +155,7 @@ macro_rules! generic {
 
 #[macro_export]
 macro_rules! log_generic {
-    ($level:expr, $($arg:tt)*) => ({
+    ($level:expr_2021, $($arg:tt)*) => ({
         let domain = env!("CARGO_PKG_NAME");
         glib::g_log!(domain, $level, "{}", format!($($arg)+))
     })

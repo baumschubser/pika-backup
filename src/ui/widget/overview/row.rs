@@ -4,14 +4,11 @@ use adw::subclass::prelude::*;
 use crate::ui::widget::StatusRow;
 
 mod imp {
-    use crate::ui::{
-        self,
-        widget::{StatusRow, WrapBox},
-        App,
-    };
+    use std::cell::OnceCell;
 
     use super::*;
-    use std::cell::OnceCell;
+    use crate::ui::widget::{StatusRow, WrapBox};
+    use crate::ui::{self, App};
 
     #[derive(Default, glib::Properties, gtk::CompositeTemplate)]
     #[template(file = "row.ui")]
@@ -101,8 +98,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct OverviewRow(ObjectSubclass<imp::OverviewRow>)
-    @extends gtk::Widget,
-    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+    @extends gtk::Widget, gtk::ListBoxRow,
+    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Actionable;
 }
 
 impl OverviewRow {

@@ -1,8 +1,8 @@
+use std::collections::BTreeSet;
+
 use super::*;
 use crate::config;
 use crate::prelude::*;
-
-use std::collections::BTreeSet;
 
 /// Empirical value for the space that borg needs
 pub static DIRECTORY_SIZE: u64 = 109;
@@ -34,8 +34,8 @@ impl Exclude {
 
 /// Estimate backup size
 ///
-/// Returns the total size of the backup and the size of all created/modified files.
-/// Using `u64` is sufficient for several exabytes.
+/// Returns the total size of the backup and the size of all created/modified
+/// files. Using `u64` is sufficient for several exabytes.
 pub fn calculate(
     config: &config::Backup,
     history: &config::history::Histories,
@@ -112,15 +112,18 @@ pub fn calculate(
 
                         match result {
                             Ok(size) => size_touched += size,
-                            Err(err) => error!("FILESYSTEM BUG: mtime/ctime has invalid value for path {:?}. Backtrace: {err:?}", entry.path()),
+                            Err(err) => error!(
+                                "FILESYSTEM BUG: mtime/ctime has invalid value for path {:?}. Backtrace: {err:?}",
+                                entry.path()
+                            ),
                         };
                     }
                 }
                 Err(err) => {
-                    if let (Some(path), Some(io_error)) = (err.path(), err.io_error()) {
-                        if io_error.kind() == std::io::ErrorKind::PermissionDenied {
-                            unreadable_paths.push(path.to_path_buf());
-                        }
+                    if let (Some(path), Some(io_error)) = (err.path(), err.io_error())
+                        && io_error.kind() == std::io::ErrorKind::PermissionDenied
+                    {
+                        unreadable_paths.push(path.to_path_buf());
                     }
                 }
             }

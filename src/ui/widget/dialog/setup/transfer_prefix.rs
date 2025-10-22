@@ -1,7 +1,8 @@
-use crate::config;
-use crate::ui::prelude::*;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+
+use crate::config;
+use crate::ui::prelude::*;
 
 mod imp {
 
@@ -9,9 +10,9 @@ mod imp {
 
     use glib::subclass::Signal;
 
-    use crate::{config, ui::widget::PkDialogPageImpl};
-
     use super::*;
+    use crate::config;
+    use crate::ui::widget::PkDialogPageImpl;
 
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "transfer_prefix.ui")]
@@ -42,9 +43,11 @@ mod imp {
         fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
             SIGNALS.get_or_init(|| {
-                vec![Signal::builder("continue")
-                    .param_types([config::ArchivePrefix::static_type()])
-                    .build()]
+                vec![
+                    Signal::builder("continue")
+                        .param_types([config::ArchivePrefix::static_type()])
+                        .build(),
+                ]
             })
         }
     }

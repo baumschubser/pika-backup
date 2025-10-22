@@ -3,14 +3,15 @@ pub mod host;
 pub mod password;
 pub mod upower;
 
-use crate::config;
-use crate::prelude::*;
-use async_std::prelude::*;
-
-use gio::prelude::*;
 use std::convert::TryInto;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
+
+use gio::prelude::*;
+use smol::prelude::*;
+
+use crate::config;
+use crate::prelude::*;
 
 pub trait LookupConfigId {
     type Item;
@@ -22,7 +23,7 @@ pub trait LookupConfigId {
     fn try_get(&self, key: &ConfigId) -> Result<&Self::Item, config::error::BackupNotFound>;
 }
 
-extern "C" {
+unsafe extern "C" {
     fn fnmatch(pattern: *const c_char, string: *const c_char, flags: c_int) -> c_int;
 }
 

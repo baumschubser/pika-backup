@@ -1,14 +1,12 @@
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
-use crate::borg;
-use crate::ui;
-use crate::ui::prelude::*;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gtk::FileFilter;
 
 use super::imp;
+use crate::ui::prelude::*;
+use crate::{borg, ui};
 
 #[gtk::template_callbacks]
 impl imp::BackupPage {
@@ -62,8 +60,8 @@ impl imp::BackupPage {
     }
 
     pub async fn on_backup_disk_eject(&self) -> Result<()> {
-        // Hide the button immediately to prevent accidental multiple triggers of the action
-        // It will be shown again on error
+        // Hide the button immediately to prevent accidental multiple triggers of the
+        // action It will be shown again on error
         self.backup_disk_eject_button.set_visible(false);
 
         let res =
@@ -100,7 +98,7 @@ impl imp::BackupPage {
 
                 ui::utils::show_error_transient_for(
                 gettext("Unable to Include Location"),
-                gettextf("The following paths could not be included because they aren't reliably available in the sandbox:\n{}", &[&path_list]),
+                gettextf("The following paths could not be included because they aren't reliably available in the sandbox:\n{}", [&path_list]),
                 None,
                 &main_ui().window(),
             )
@@ -220,7 +218,7 @@ impl imp::BackupPage {
 
         ui::utils::confirmation_dialog(
             &*self.obj(),
-            &gettextf("No longer include “{}” in backups?", &[&path_string]),
+            &gettextf("No longer include “{}” in backups?", [&path_string]),
             &gettext(
                 "All files contained in this folder will no longer be part of future backups.",
             ),

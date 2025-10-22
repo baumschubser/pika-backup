@@ -1,12 +1,14 @@
 /*!
 # Daemon initialization
 */
-use crate::daemon::prelude::*;
-use gio::prelude::*;
 use std::collections::HashMap;
 
+use gio::prelude::*;
+
 use crate::config;
-use crate::daemon::{action, dbus, notification::Note, schedule};
+use crate::daemon::notification::Note;
+use crate::daemon::prelude::*;
+use crate::daemon::{action, dbus, schedule};
 use crate::schedule::requirements;
 
 pub fn init() {
@@ -93,6 +95,9 @@ async fn probe(config: &config::Backup) {
                         requirements::Global::OtherBackupRunning(_) => {
                             Some(gettext("The backup repository is already in use."))
                         }
+                        requirements::Global::Browsing => {
+                            Some(gettext("Archives are currently opened for browsing."))
+                        }
                         requirements::Global::MeteredConnection => {
                             Some(gettext("Only metered internet connections available."))
                         }
@@ -130,7 +135,7 @@ async fn probe(config: &config::Backup) {
                             gio::Notification::new(&gettext("Backup Device Required"));
                         notification.set_body(Some(&gettextf(
                             "“{}” has to be connected for the scheduled backup to start",
-                            &[&config.repo.location()],
+                            [&config.repo.location()],
                         )));
                         gio_app().send_notification(
                             Some(&Note::DeviceRequired(&config.id).to_string()),

@@ -8,16 +8,17 @@ pub mod notification;
 pub mod password_storage;
 pub mod repo_cache;
 
-use crate::ui::prelude::*;
-use adw::prelude::*;
-
-use crate::config;
-
-use ashpd::desktop::background;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::io::Read;
 use std::os::unix::process::CommandExt;
+
+use adw::prelude::*;
+use ashpd::desktop::background;
+
+use crate::config;
+use crate::ui::App;
+use crate::ui::prelude::*;
 
 #[derive(Clone, Copy, Debug, glib::ValueDelegate, PartialEq, Eq)]
 #[value_delegate(from = u8)]
@@ -75,20 +76,17 @@ pub fn rel_path(path: &std::path::Path) -> std::path::PathBuf {
 /// - `config` exists and contains the string `[repository]`
 pub async fn is_backup_repo(path: &std::path::Path) -> bool {
     trace!("Checking path if it is a repo '{}'", &path.display());
-    if let Ok(data) = std::fs::File::open(path.join("data")).and_then(|x| x.metadata()) {
-        if data.is_dir() {
-            if let Ok(mut cfg) = std::fs::File::open(path.join("config")) {
-                if let Ok(metadata) = cfg.metadata() {
-                    if metadata.len() < 1024 * 1024 {
-                        let mut content = String::new();
-                        let _result = cfg.read_to_string(&mut content);
-                        if content.contains("[repository]") {
-                            trace!("Is a repository");
-                            return true;
-                        }
-                    }
-                }
-            }
+    if let Ok(data) = std::fs::File::open(path.join("data")).and_then(|x| x.metadata())
+        && data.is_dir()
+        && let Ok(mut cfg) = std::fs::File::open(path.join("config"))
+        && let Ok(metadata) = cfg.metadata()
+        && metadata.len() < 1024 * 1024
+    {
+        let mut content = String::new();
+        let _result = cfg.read_to_string(&mut content);
+        if content.contains("[repository]") {
+            trace!("Is a repository");
+            return true;
         }
     };
 
@@ -122,7 +120,7 @@ pub async fn background_permission() -> Result<()> {
         Ok(())
     } else {
         let response = background::Background::request()
-            .identifier(ashpd::WindowIdentifier::default())
+            .identifier(ashpd::WindowIdentifier::from_native(&App::default().main_window()).await)
             .reason(&*gettext("Schedule backups and continue running backups."))
             .auto_start(true)
             .command(std::iter::once(crate::DAEMON_BINARY))
@@ -166,7 +164,7 @@ pub async fn background_permission() -> Result<()> {
                 unsafe {
                     command.pre_exec(|| {
                         nix::unistd::setsid()
-                            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+                            .map_err(std::io::Error::other)
                             .map(|_| ())
                     });
                 }
@@ -265,16 +263,15 @@ fn try_active_config_id() -> Result<ConfigId> {
         .ok_or_else(|| Message::short("There is no active backup in the interface.").into())
 }
 
-pub async fn spawn_thread<P: core::fmt::Display, F, R>(name: P, task: F) -> Result<R>
+// TODO: Currently the name is ignored
+pub async fn spawn_thread<P: core::fmt::Display, F, R>(_name: P, task: F) -> Result<R>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
 {
-    let result = async_std::task::Builder::new()
-        .name(name.to_string())
-        .spawn(async { task() });
+    let result = smol::unblock(task);
 
-    Ok(result.err_to_msg(gettext("Failed to Create Thread"))?.await)
+    Ok(result.await)
 }
 
 quick_error! {
@@ -421,6 +418,7 @@ pub async fn show_error_transient_for<W: IsA<gtk::Widget>>(
         let dialog = adw::AlertDialog::builder()
             .heading(&primary_text)
             .body(&secondary_text)
+            .prefer_wide_layout(true)
             .build();
 
         dialog.add_responses(&[("close", &gettext("Close"))]);
@@ -479,6 +477,7 @@ impl ConfirmationDialog {
         let dialog = adw::AlertDialog::builder()
             .heading(&self.title)
             .body(&self.message)
+            .prefer_wide_layout(true)
             .build();
 
         dialog.add_responses(&[("cancel", &self.cancel), ("accept", &self.accept)]);

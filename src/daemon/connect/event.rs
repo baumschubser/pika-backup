@@ -1,7 +1,8 @@
-use crate::daemon::prelude::*;
 use gio::prelude::*;
 
-use crate::daemon::{action, notification::Note};
+use crate::daemon::action;
+use crate::daemon::notification::Note;
+use crate::daemon::prelude::*;
 
 pub fn volume_added(volume: &gio::Volume) {
     let uuid = volume.uuid().unwrap_or_default();
@@ -26,7 +27,7 @@ pub fn volume_added(volume: &gio::Volume) {
 
             notification.set_body(Some(&gettextf(
                 "“{}” contains multiple configured backups.",
-                &[&first_backup.repo.location()],
+                [&first_backup.repo.location()],
             )));
 
             notification.add_button_with_target_value(
@@ -39,7 +40,7 @@ pub fn volume_added(volume: &gio::Volume) {
 
             notification.set_body(Some(&gettextf(
                 "“{}” contains one configured backup.",
-                &[&first_backup.repo.location()],
+                [&first_backup.repo.location()],
             )));
 
             notification.add_button_with_target_value(

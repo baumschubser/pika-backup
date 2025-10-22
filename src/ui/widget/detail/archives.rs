@@ -4,27 +4,26 @@ mod events;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-
-use crate::{config, schedule, ui};
 use ui::prelude::*;
 
 use super::DetailPageKind;
+use crate::{config, schedule, ui};
 
 fn find_first_populated_dir(dir: &std::path::Path) -> std::path::PathBuf {
-    if let Ok(mut dir_iter) = dir.read_dir() {
-        if let Some(Ok(new_dir)) = dir_iter.next() {
-            if new_dir.path().is_dir() && dir_iter.next().is_none() {
-                return find_first_populated_dir(&new_dir.path());
-            }
-        }
+    if let Ok(mut dir_iter) = dir.read_dir()
+        && let Some(Ok(new_dir)) = dir_iter.next()
+        && new_dir.path().is_dir()
+        && dir_iter.next().is_none()
+    {
+        return find_first_populated_dir(&new_dir.path());
     }
 
     dir.to_path_buf()
 }
 
 mod imp {
-    use self::ui::widget::{dialog::CheckResultDialog, StatusRow};
-
+    use self::ui::widget::StatusRow;
+    use self::ui::widget::dialog::CheckResultDialog;
     use super::*;
 
     #[derive(Default, gtk::CompositeTemplate)]

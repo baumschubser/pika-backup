@@ -1,14 +1,13 @@
-use crate::ui::prelude::*;
-use crate::ui::App;
-use gio::prelude::*;
-
-use crate::borg;
-use crate::borg::task;
-use crate::borg::RepoId;
-use crate::ui;
-use borg::task::Task;
 use std::future::Future;
+
+use borg::task::Task;
+use gio::prelude::*;
 use ui::error::Combined;
+
+use crate::borg::{RepoId, task};
+use crate::ui::prelude::*;
+use crate::ui::{App, utils};
+use crate::{borg, ui};
 
 /// Is a borg operation registered with a [QuitGuard]]?
 pub fn is_borg_operation_running() -> bool {
@@ -55,7 +54,8 @@ where
 
 /// Executes a borg command
 ///
-/// This takes a [QuitGuard] to prove that one has been set up and is currently active.
+/// This takes a [QuitGuard] to prove that one has been set up and is currently
+/// active.
 pub async fn exec<T: Task>(
     command: borg::Command<T>,
     _guard: &QuitGuard,
@@ -106,7 +106,8 @@ where
         });
     }));
 
-    // Handle an error when writing history, but still return the result of the borg operation
+    // Handle an error when writing history, but still return the result of the borg
+    // operation
     Handler::handle(
         BACKUP_HISTORY
             .try_update(move |history| {
@@ -133,9 +134,13 @@ where
 }
 
 async fn ask_unmount(kind: task::Kind, repo_id: &RepoId) -> Result<()> {
-    crate::ui::utils::borg::cleanup_mounts().await?;
+    crate::ui::utils::borg::cleanup_repo_mounts().await;
 
-    if ACTIVE_MOUNTS.load().contains(repo_id) {
+    if BACKUP_HISTORY
+        .load()
+        .browsing_repo_ids(&BACKUP_CONFIG.load())
+        .contains(repo_id)
+    {
         debug!("Trying to run a {kind:?} on a backup that is currently mounted.");
 
         match kind {
@@ -166,7 +171,7 @@ async fn ask_unmount(kind: task::Kind, repo_id: &RepoId) -> Result<()> {
         }
 
         trace!("User decided to unmount repo.");
-        unmount(repo_id)
+        repo_unmount(repo_id)
             .await
             .err_to_msg(gettext("Failed to unmount repository."))?;
     }
@@ -194,50 +199,51 @@ async fn spawn_borg_thread_ask_password<C: 'static + borg::CommandRun<T>, T: Tas
                         None
                     };
 
-                if let Some(password) = crate::ui::utils::password_storage::password_dialog(
+                match crate::ui::utils::password_storage::password_dialog(
                     &command.repo(),
                     &T::name(),
                     keyring_error.as_deref(),
                 )
                 .await
                 {
-                    command.set_password(password);
-                    password_changed = true;
+                    Some(password) => {
+                        command.set_password(password);
+                        password_changed = true;
 
-                    continue;
-                } else {
-                    Err(Error::UserCanceled.into())
+                        continue;
+                    }
+                    _ => Err(Error::UserCanceled.into()),
                 }
             }
             _ => {
-                if password_changed {
-                    if let (Some(password), Some(config)) =
+                if password_changed
+                    && let (Some(password), Some(config)) =
                         (&command.password(), &command.try_config())
+                {
+                    if let Err(Error::Message(err)) =
+                        crate::ui::utils::password_storage::store_password(config, password).await
                     {
-                        if let Err(Error::Message(err)) =
-                            crate::ui::utils::password_storage::store_password(config, password)
-                                .await
-                        {
-                            warn!("Error using keyring, using in-memory password store. Keyring error: '{err:?}'");
+                        warn!(
+                            "Error using keyring, using in-memory password store. Keyring error: '{err:?}'"
+                        );
 
-                            // Use the in-memory password store instead
-                            crate::globals::MEMORY_PASSWORD_STORE
-                                .set_password(config, password.clone());
-                        }
+                        // Use the in-memory password store instead
+                        crate::globals::MEMORY_PASSWORD_STORE
+                            .set_password(config, password.clone());
+                    }
 
-                        if !config.encrypted {
-                            // We assumed that the repo doesn't have encryption, but this assumption was outdated.
-                            // Set the encrypted flag in the config
-                            if let Some(id) = command.config_id() {
-                                BACKUP_CONFIG
-                                    .try_update(|config| {
-                                        let cfg = config.try_get_mut(&id)?;
-                                        cfg.encrypted = true;
+                    if !config.encrypted {
+                        // We assumed that the repo doesn't have encryption, but this assumption was
+                        // outdated. Set the encrypted flag in the config
+                        if let Some(id) = command.config_id() {
+                            BACKUP_CONFIG
+                                .try_update(|config| {
+                                    let cfg = config.try_get_mut(&id)?;
+                                    cfg.encrypted = true;
 
-                                        Ok(())
-                                    })
-                                    .await?;
-                            }
+                                    Ok(())
+                                })
+                                .await?;
                         }
                     }
                 }
@@ -259,13 +265,14 @@ where
         let result = super::spawn_thread(
             name.to_string(),
             enclose!((borg, task) move || {
-                async_std::task::block_on(task(borg))
+               smol::block_on(task(borg))
             }),
         )
         .await;
 
         return match result? {
-            Err(borg::Error::Failed(borg::Failure::LockTimeout)) => {
+            Err(borg::Error::Failed(borg::Failure::LockTimeout)) if !borg.is_scheduled() => {
+                // Ask to break lock for manually started backups
                 handle_lock(borg.clone()).await?;
                 continue;
             }
@@ -276,9 +283,10 @@ where
 }
 
 async fn handle_lock<B: borg::BorgRunConfig>(borg: B) -> CombinedResult<()> {
+    let repo_location = borg.repo().location();
     ui::utils::ConfirmationDialog::new(
-        &gettext("Repository already in use."),
-        &(gettext("The backup repository is marked as already in use. This information can be outdated if, for example, the computer lost power while using the repository.")
+        &gettext("Repository Already in Use"),
+        &(gettextf("The backup repository “{}” is marked as already in use. This information can be outdated if, for example, the computer lost power while using the repository.", [repo_location])
         + "\n\n"
         + &gettext("Only continue if it is certain that the repository is not used by any program! Continuing while another program uses the repository might corrupt backup data!")),
         &gettext("Cancel"),
@@ -297,21 +305,73 @@ async fn handle_lock<B: borg::BorgRunConfig>(borg: B) -> CombinedResult<()> {
     .map_err(Into::into)
 }
 
-pub async fn unmount(repo_id: &RepoId) -> Result<()> {
+pub async fn repo_unmount(repo_id: &RepoId) -> Result<()> {
     borg::functions::umount(repo_id)
         .await
         .err_to_msg(gettext("Failed to unmount repository."))?;
-    ACTIVE_MOUNTS.update(|mounts| {
-        mounts.remove(repo_id);
-    });
+    utils::borg::unset_repo_browsing(repo_id).await;
+
+    let configs = BACKUP_CONFIG.load();
+    let backup_ids = configs
+        .iter()
+        .filter(|x| x.repo_id == *repo_id)
+        .map(|x| &x.id)
+        .collect::<Vec<_>>();
+
+    BACKUP_HISTORY
+        .try_update(|histories| {
+            for id in backup_ids.iter() {
+                histories.remove_browsing((*id).clone());
+            }
+            Ok(())
+        })
+        .await?;
 
     main_ui().page_detail().archives_page().refresh_status();
 
     Ok(())
 }
 
-pub async fn cleanup_mounts() -> Result<()> {
-    let mounts = ACTIVE_MOUNTS.load();
+pub async fn set_repo_browsing(repo_id: &RepoId) {
+    let configs = BACKUP_CONFIG.load();
+    let backup_ids = configs
+        .iter()
+        .filter(|x| x.repo_id == *repo_id)
+        .map(|x| &x.id)
+        .collect::<Vec<_>>();
+
+    let _ = BACKUP_HISTORY
+        .try_update(|histories| {
+            for id in backup_ids.iter() {
+                histories.set_browsing((*id).clone());
+            }
+            Ok(())
+        })
+        .await;
+}
+
+pub async fn unset_repo_browsing(repo_id: &RepoId) {
+    let configs = BACKUP_CONFIG.load();
+    let backup_ids = configs
+        .iter()
+        .filter(|x| x.repo_id == *repo_id)
+        .map(|x| &x.id)
+        .collect::<Vec<_>>();
+
+    let _ = BACKUP_HISTORY
+        .try_update(|histories| {
+            for id in backup_ids.iter() {
+                histories.remove_browsing((*id).clone());
+            }
+            Ok(())
+        })
+        .await;
+}
+
+pub async fn cleanup_repo_mounts() {
+    let mounts = BACKUP_HISTORY
+        .load()
+        .browsing_repo_ids(&BACKUP_CONFIG.load());
 
     // Find mounts that were already unmounted outside of Pika
     for repo_id in mounts.iter() {
@@ -319,86 +379,91 @@ pub async fn cleanup_mounts() -> Result<()> {
             // The repository was unmounted somewhere else
             // Call unmount to fix the state
             warn!("Marking repo {repo_id:?} as unmounted, as the mountpoint doesn't exist anymore");
-            unmount(repo_id).await?;
+            if let Err(err) = repo_unmount(repo_id).await {
+                warn!("Failed to run the borg unmount procedure for '{repo_id:?}': {err}");
+            }
         }
     }
 
     // Find mounts that should belong to Pika but aren't registered.
-    // This would be leftover mounts from a previous run of Pika when it wasn't quit properly.
+    // This would be leftover mounts from a previous run of Pika when it wasn't quit
+    // properly.
     for config in BACKUP_CONFIG.load().iter() {
         let repo_id = &config.repo_id;
         if !mounts.contains(repo_id) && borg::is_mounted(repo_id).await {
             warn!(
                 "Marking repo {repo_id:?} as mounted, was probably mounted from a force-quit app"
             );
-            ACTIVE_MOUNTS.update(|mounts| {
-                mounts.insert(repo_id.clone());
-            });
+            utils::borg::set_repo_browsing(repo_id).await;
         }
     }
-
-    Ok(())
 }
 
 pub async fn unmount_backup_disk(backup: crate::config::Backup) -> Result<()> {
-    if let Some(volume) = backup.repo.removable_drive_volume() {
-        // We have a removable drive and found a volume
-        let mount_operation = gtk::MountOperation::new(Some(&main_ui().window()));
+    match backup.repo.removable_drive_volume() {
+        Some(volume) => {
+            // We have a removable drive and found a volume
+            let mount_operation = gtk::MountOperation::new(Some(&main_ui().window()));
 
-        if let Some(drive) =
-            volume
+            match volume
                 .drive()
                 .and_then(|drive| if drive.can_eject() { Some(drive) } else { None })
-        {
-            // We don't need to stop the drive, it will only spin down the hard disk. The drive is safe to remove in any case
-            let res = if drive.can_stop() {
-                debug!("Stopping drive {}", drive.name());
-                drive
-                    .stop_future(gio::MountUnmountFlags::empty(), Some(&mount_operation))
-                    .await
-            } else {
-                debug!("Ejecting drive {}", drive.name());
-                drive
-                    .eject_with_operation_future(
-                        gio::MountUnmountFlags::empty(),
-                        Some(&mount_operation),
-                    )
-                    .await
-            };
+            {
+                Some(drive) => {
+                    // We don't need to stop the drive, it will only spin down the hard disk. The
+                    // drive is safe to remove in any case
+                    let res = if drive.can_stop() {
+                        debug!("Stopping drive {}", drive.name());
+                        drive
+                            .stop_future(gio::MountUnmountFlags::empty(), Some(&mount_operation))
+                            .await
+                    } else {
+                        debug!("Ejecting drive {}", drive.name());
+                        drive
+                            .eject_with_operation_future(
+                                gio::MountUnmountFlags::empty(),
+                                Some(&mount_operation),
+                            )
+                            .await
+                    };
 
-            if let Err(err) = res {
-                if let Some(gio::IOErrorEnum::FailedHandled) = err.kind() {
-                    debug!("Unmount aborted by user: {}", err);
-                    return Ok(());
-                } else {
-                    debug!("Error ejecting disk: {}", err);
-                    return Err(Message::new(
+                    if let Err(err) = res {
+                        if let Some(gio::IOErrorEnum::FailedHandled) = err.kind() {
+                            debug!("Unmount aborted by user: {}", err);
+                            return Ok(());
+                        } else {
+                            debug!("Error ejecting disk: {}", err);
+                            return Err(Message::new(
+                                gettext("Unable to Eject Backup Disk"),
+                                err.to_string(),
+                            )
+                            .into());
+                        }
+                    }
+
+                    // When the drive was ejected we can show a toast
+                    let toast = adw::Toast::builder()
+                        .title(gettextf("{} can be safely unplugged.", [&drive.name()]))
+                        .timeout(5)
+                        .build();
+
+                    main_ui().toast().add_toast(toast);
+                }
+                _ => {
+                    debug!(
+                        "Unmount disk: Backup disk {} can't be ejected",
+                        volume.name()
+                    );
+                    Err(Message::new(
                         gettext("Unable to Eject Backup Disk"),
-                        err.to_string(),
-                    )
-                    .into());
+                        gettextf("{} can't be ejected.", [&volume.name()]),
+                    ))?;
                 }
             }
-
-            // When the drive was ejected we can show a toast
-            let toast = adw::Toast::builder()
-                .title(gettextf("{} can be safely unplugged.", &[&drive.name()]))
-                .timeout(5)
-                .build();
-
-            main_ui().toast().add_toast(toast);
-        } else {
-            debug!(
-                "Unmount disk: Backup disk {} can't be ejected",
-                volume.name()
-            );
-            Err(Message::new(
-                gettext("Unable to Eject Backup Disk"),
-                gettextf("{} can't be ejected.", &[&volume.name()]),
-            ))?;
         }
-    } else {
-        debug!("Unmount disk: Backup disk not found");
+        _ => {
+            debug!("Unmount disk: Backup disk not found");
+        }
     }
 
     Ok(())

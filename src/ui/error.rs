@@ -2,9 +2,7 @@ use gtk::prelude::*;
 
 use super::prelude::*;
 use super::widget::AppWindow;
-use crate::borg;
-use crate::config;
-use crate::ui;
+use crate::{borg, config, ui};
 
 pub type Result<T> = std::result::Result<T, Error>;
 pub type CombinedResult<T> = std::result::Result<T, Combined>;
@@ -121,11 +119,12 @@ impl Message {
     }
 
     pub fn from_secret_service<T: std::fmt::Display>(text: T, err: oo7::Error) -> Self {
-        if matches!(
-            err,
-            oo7::Error::Portal(oo7::portal::Error::CancelledPortalRequest)
-        ) {
-            Self::new(text, gettext("The keyring is not available. Pika Backup requires a keyring daemon (“secret service”) to store passwords. For installation instructions see the operating system documentation."))
+        if let oo7::Error::File(oo7::file::Error::Portal(portal_err)) = &err {
+            let mut msg = gettext(
+                "The keyring is not available. Pika Backup requires a keyring daemon (“secret service”) to store passwords. For installation instructions see the operating system documentation.",
+            );
+            msg.push_str(&portal_err.to_string());
+            Self::new(text, msg)
         } else {
             Self::new(text, err)
         }
@@ -154,7 +153,7 @@ impl From<config::error::BackupExists> for Error {
     fn from(value: config::error::BackupExists) -> Self {
         Self::Message(Message::short(gettextf(
             "Backup with id “{}” already exists.",
-            &[value.id.as_str()],
+            [value.id.as_str()],
         )))
     }
 }
@@ -163,7 +162,7 @@ impl From<config::error::BackupNotFound> for Error {
     fn from(value: config::error::BackupNotFound) -> Self {
         Self::Message(Message::short(gettextf(
             "Could not find backup configuration with id “{}”.",
-            &[value.id.as_str()],
+            [value.id.as_str()],
         )))
     }
 }
@@ -178,7 +177,7 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Message(msg) => msg.fmt(f),
-            Error::UserCanceled => write!(f, "{}", gettext("Canceled")), // This should generally not appear anywhere,
+            Error::UserCanceled => write!(f, "{}", gettext("Canceled")), /* This should generally not appear anywhere, */
         }
     }
 }

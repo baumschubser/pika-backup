@@ -1,16 +1,17 @@
-use crate::ui::prelude::*;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 
 use super::SetupAction;
+use crate::ui::prelude::*;
 
 mod imp {
+    use std::cell::Cell;
+    use std::sync::OnceLock;
+
     use glib::subclass::Signal;
 
-    use crate::ui::widget::PkDialogPageImpl;
-
     use super::*;
-    use std::{cell::Cell, sync::OnceLock};
+    use crate::ui::widget::PkDialogPageImpl;
 
     #[derive(Default, glib::Properties, gtk::CompositeTemplate)]
     #[template(file = "repo_kind.ui")]
@@ -41,9 +42,11 @@ mod imp {
         fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
             SIGNALS.get_or_init(|| {
-                vec![Signal::builder("continue")
-                    .param_types([SetupAction::static_type()])
-                    .build()]
+                vec![
+                    Signal::builder("continue")
+                        .param_types([SetupAction::static_type()])
+                        .build(),
+                ]
             })
         }
     }

@@ -1,7 +1,9 @@
-use crate::config::{self, Password};
-use crate::ui::widget::EncryptionPasswordDialog;
-use crate::ui::{prelude::*, App};
 use std::collections::HashMap;
+
+use crate::config::{self, Password};
+use crate::ui::App;
+use crate::ui::prelude::*;
+use crate::ui::widget::EncryptionPasswordDialog;
 
 pub async fn password_dialog(
     repo: &config::Repository,
@@ -57,7 +59,7 @@ async fn set_password(
     keyring
         .create_item(
             // Translators: This is the description for entries in the password database.
-            &gettextf("Pika Backup “{}”", &[&config.repo.location()]),
+            &gettextf("Pika Backup “{}”", [&config.repo.location()]),
             &HashMap::from([("repo-id", config.repo_id.as_str())]),
             password.as_bytes(),
             true,

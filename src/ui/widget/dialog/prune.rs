@@ -1,19 +1,16 @@
 use adw::prelude::*;
-
-use crate::borg;
-use crate::config;
-use crate::ui;
-use crate::ui::prelude::*;
-
 use adw::subclass::prelude::*;
 
+use crate::ui::prelude::*;
+use crate::{borg, config, ui};
+
 mod imp {
+    use std::cell::{Cell, OnceCell, RefCell};
+
     use adw::subclass::dialog::AdwDialogImplExt;
 
     use self::borg::{ListArchive, PruneInfo};
-
     use super::*;
-    use std::cell::{Cell, OnceCell, RefCell};
 
     #[derive(Default, gtk::CompositeTemplate, glib::Properties)]
     #[properties(wrapper_type = super::PruneDialog)]
@@ -45,7 +42,7 @@ mod imp {
         #[template_child]
         untouched: TemplateChild<gtk::Label>,
 
-        result_sender: RefCell<Option<futures::channel::oneshot::Sender<bool>>>,
+        result_sender: RefCell<Option<futures_channel::oneshot::Sender<bool>>>,
     }
 
     #[glib::object_subclass]
@@ -82,9 +79,13 @@ mod imp {
             self.status_page.set_description(Some(&status));
 
             let description = if self.review_only.get() {
-                gettext("After applying these changes, the next automatic deletion of old archives would have the following consequences.")
+                gettext(
+                    "After applying these changes, the next automatic deletion of old archives would have the following consequences.",
+                )
             } else {
-                gettext("Proceeding with this operation will irretrievably delete some of the archives. The saved data for those specific points in time will no longer be available.")
+                gettext(
+                    "Proceeding with this operation will irretrievably delete some of the archives. The saved data for those specific points in time will no longer be available.",
+                )
             };
 
             self.preferences_group.set_description(Some(&description));
@@ -149,7 +150,7 @@ mod imp {
         pub(super) async fn choose_future(&self, config: &config::Backup) -> Result<()> {
             let guard = QuitGuard::default();
 
-            let (sender, receiver) = futures::channel::oneshot::channel();
+            let (sender, receiver) = futures_channel::oneshot::channel();
             self.result_sender.replace(Some(sender));
 
             let prune_info = ui::utils::borg::exec(

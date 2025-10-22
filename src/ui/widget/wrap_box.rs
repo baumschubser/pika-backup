@@ -3,7 +3,8 @@ use gtk::subclass::prelude::*;
 
 glib::wrapper! {
     pub struct WrapBox(ObjectSubclass<imp::WrapBox>)
-        @extends gtk::Box, gtk::Widget, gtk::Orientable;
+        @extends gtk::Box, gtk::Widget, gtk::Orientable,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl WrapBox {
@@ -58,12 +59,12 @@ impl WrapBox {
 }
 
 mod imp {
-    use super::*;
+    use std::cell::{Cell, RefCell};
+    use std::sync::LazyLock;
 
     use glib::{ParamSpec, ParamSpecInt, Value};
 
-    use std::cell::{Cell, RefCell};
-    use std::sync::LazyLock;
+    use super::*;
 
     #[derive(Debug, Default)]
     pub struct WrapBox {
@@ -81,11 +82,13 @@ mod imp {
     impl ObjectImpl for WrapBox {
         fn properties() -> &'static [ParamSpec] {
             static PROPERTIES: LazyLock<Vec<ParamSpec>> = LazyLock::new(|| {
-                vec![ParamSpecInt::builder("width-estimate")
-                    .minimum(100)
-                    .maximum(1000)
-                    .default_value(350)
-                    .build()]
+                vec![
+                    ParamSpecInt::builder("width-estimate")
+                        .minimum(100)
+                        .maximum(1000)
+                        .default_value(350)
+                        .build(),
+                ]
             });
             PROPERTIES.as_ref()
         }

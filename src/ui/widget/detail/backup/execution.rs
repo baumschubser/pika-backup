@@ -1,17 +1,11 @@
-use crate::borg;
-use crate::config;
-use crate::config::history;
-use crate::config::history::RunInfo;
-use crate::config::UserScriptKind;
-use crate::schedule;
-use crate::ui;
-
-use crate::ui::prelude::*;
-use crate::ui::utils::notification::BackupNote;
-
 use adw::prelude::*;
 
 use super::imp;
+use crate::config::history::RunInfo;
+use crate::config::{UserScriptKind, history};
+use crate::ui::prelude::*;
+use crate::ui::utils::notification::BackupNote;
+use crate::{borg, config, schedule, ui};
 
 impl imp::BackupPage {
     pub(super) async fn backup(
@@ -52,7 +46,7 @@ impl imp::BackupPage {
         match compact_result {
             Err(borg::Error::Aborted(_)) => return Ok(false),
             Err(err) => {
-                return Err(Message::new(gettext("Reclaiming Free Space Failed"), err).into())
+                return Err(Message::new(gettext("Reclaiming Free Space Failed"), err).into());
             }
             _ => {}
         };

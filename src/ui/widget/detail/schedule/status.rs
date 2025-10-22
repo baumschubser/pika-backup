@@ -1,9 +1,10 @@
+use std::fmt::Write;
+
 use crate::config;
 use crate::schedule::requirements;
 use crate::ui::prelude::*;
 use crate::ui::utils::StatusLevel;
 use crate::ui::widget::StatusRow;
-use std::fmt::Write;
 
 pub struct Status {
     pub main: StatusRow,
@@ -116,6 +117,12 @@ impl Status {
                         gettext("Other backups on repository have to be completed"),
                         "",
                         "media-playback-start-symbolic",
+                        problem_level,
+                    )),
+                    requirements::Global::Browsing => problems.push(StatusRow::new(
+                        gettext("Archives cannot be opened for browsing"),
+                        "",
+                        "folder-open-symbolic",
                         problem_level,
                     )),
                     requirements::Global::ThisBackupRunning => (),

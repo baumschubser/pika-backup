@@ -1,14 +1,12 @@
-use crate::borg::prelude::*;
-
-use super::error;
-use super::Result;
-use arc_swap::ArcSwap;
-use async_std::channel::{self, unbounded};
 use std::sync::Arc;
 
-use super::log_json;
+use arc_swap::ArcSwap;
+use smol::channel::{self as channel, unbounded};
+
 use super::status::Run as Status;
 use super::task::Task;
+use super::{Result, error, log_json};
+use crate::borg::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum Update {
@@ -45,13 +43,14 @@ impl<T: Task> Communication<T> {
         if !matches!(**self.status.load(), Status::Stopping) {
             self.status.store(Arc::new(status));
             let senders = self.sender.get().into_iter();
-            async_std::task::spawn(async move {
+            smol::spawn(async move {
                 for sender in senders {
                     if let Err(err) = sender.send(Update::Status(status)).await {
                         error!("Failed to send status update: {}", err);
                     }
                 }
-            });
+            })
+            .detach();
         }
     }
 

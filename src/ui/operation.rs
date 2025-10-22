@@ -1,19 +1,16 @@
 //! Track [crate::borg] operation from UI's side
 
-use adw::prelude::*;
-use async_std::prelude::*;
-use ui::prelude::*;
-
-use crate::borg;
-use crate::borg::log_json;
-use crate::config;
-use crate::ui;
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
+use adw::prelude::*;
+use ui::prelude::*;
+
 use super::App;
+use crate::borg::log_json;
+use crate::{borg, config, ui};
 
 const TIME_METERED_ABORT: Duration = Duration::from_secs(60);
 const TIME_ON_BATTERY_ABORT: Duration = Duration::from_secs(20 * 60);
@@ -40,12 +37,12 @@ impl<T: borg::Task> Operation<T> {
 
         let weak_process = Rc::downgrade(&process);
         glib::MainContext::default().spawn_local(async move {
-            while let Some(mut log_receiver) = weak_process
+            while let Some(log_receiver) = weak_process
                 .upgrade()
                 .map(|x| x.communication().new_receiver())
             {
                 debug!("Connect to new communication messages");
-                while let Some(output) = log_receiver.next().await {
+                while let Ok(output) = log_receiver.recv().await {
                     if let Some(process) = weak_process.upgrade() {
                         process.check_output(output);
                     }
@@ -145,10 +142,9 @@ impl<T: borg::Task> Operation<T> {
     }
 
     pub fn is_time_metered_exceeded(&self) -> bool {
-        if let Some(instant) = status_tracking().metered_since.get() {
-            instant.elapsed() > TIME_METERED_ABORT
-        } else {
-            false
+        match status_tracking().metered_since.get() {
+            Some(instant) => instant.elapsed() > TIME_METERED_ABORT,
+            _ => false,
         }
     }
 
@@ -156,10 +152,11 @@ impl<T: borg::Task> Operation<T> {
         if self.command.config.schedule.settings.run_on_battery {
             // Running on battery was explicitly enabled
             false
-        } else if let Some(instant) = status_tracking().on_battery_since.get() {
-            instant.elapsed() > TIME_ON_BATTERY_ABORT
         } else {
-            false
+            match status_tracking().on_battery_since.get() {
+                Some(instant) => instant.elapsed() > TIME_ON_BATTERY_ABORT,
+                _ => false,
+            }
         }
     }
 
@@ -214,15 +211,24 @@ impl<T: borg::Task> Operation<T> {
     fn handle_borg_question(&self, question: &log_json::QuestionPrompt) {
         let communication = self.communication().clone();
 
-        glib::MainContext::default().spawn_local(glib::clone!(
-            #[strong]
-            question,
-            async move {
-                let response =
-                    ui::utils::show_borg_question(&App::default().main_window(), &question).await;
-                communication.set_instruction(borg::Instruction::Response(response));
-            }
-        ));
+        if !self.command.is_scheduled() {
+            // Abort backup if question is asked during schedule
+            communication.set_instruction(borg::Instruction::Abort(
+                borg::Abort::QuestionDuringSchedule(question.clone()),
+            ));
+        } else {
+            // Show dialog if question is asked during schedule
+            glib::MainContext::default().spawn_local(glib::clone!(
+                #[strong]
+                question,
+                async move {
+                    let response =
+                        ui::utils::show_borg_question(&App::default().main_window(), &question)
+                            .await;
+                    communication.set_instruction(borg::Instruction::Response(response));
+                }
+            ));
+        }
     }
 }
 

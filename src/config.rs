@@ -12,6 +12,8 @@ mod schedule;
 mod schedule_status;
 mod writeable;
 
+use std::path;
+
 pub use backup::*;
 pub use exclude::Exclude;
 pub use history::Histories;
@@ -22,11 +24,9 @@ pub use repository::*;
 pub use schedule::*;
 pub use schedule_status::*;
 pub(crate) use writeable::{ArcSwapWriteable, Writeable};
+use zeroize::Zeroizing;
 
 use crate::prelude::*;
-
-use std::path;
-use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(transparent)]
@@ -58,6 +58,15 @@ impl Password {
 impl From<Zeroizing<Vec<u8>>> for Password {
     fn from(password: Zeroizing<Vec<u8>>) -> Self {
         Self(password)
+    }
+}
+
+impl From<oo7::Secret> for Password {
+    fn from(password: oo7::Secret) -> Self {
+        match password {
+            oo7::Secret::Text(ref s) => Self(Zeroizing::new(s.as_bytes().to_owned())),
+            oo7::Secret::Blob(ref b) => Self(Zeroizing::new(b.to_owned())),
+        }
     }
 }
 

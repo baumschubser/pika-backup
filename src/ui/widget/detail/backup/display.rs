@@ -1,13 +1,11 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 
-use crate::config;
-use crate::ui;
+use super::imp;
 use crate::ui::backup_status;
 use crate::ui::prelude::*;
 use crate::ui::widget::ExcludeDialog;
-
-use super::imp;
+use crate::{config, ui};
 
 impl imp::BackupPage {
     pub fn add_list_row(&self, list: &gtk::ListBox, file: &std::path::Path) -> gtk::Button {
@@ -99,39 +97,39 @@ impl imp::BackupPage {
                 row.add_prefix(&image);
             }
 
-            if let config::Exclude::Pattern(ref pattern) = exclude {
-                if matches!(
+            if let config::Exclude::Pattern(ref pattern) = exclude
+                && matches!(
                     pattern,
                     config::Pattern::Fnmatch(_) | config::Pattern::RegularExpression(_)
-                ) {
-                    // Make Regex and Shell patterns editable
-                    let edit_button = gtk::Button::builder()
-                        .icon_name("document-edit-symbolic")
-                        .valign(gtk::Align::Center)
-                        .tooltip_text(gettext("Edit Pattern"))
-                        .build();
+                )
+            {
+                // Make Regex and Shell patterns editable
+                let edit_button = gtk::Button::builder()
+                    .icon_name("document-edit-symbolic")
+                    .valign(gtk::Align::Center)
+                    .tooltip_text(gettext("Edit Pattern"))
+                    .build();
 
-                    edit_button.add_css_class("flat");
+                edit_button.add_css_class("flat");
 
-                    // Edit patterns
-                    edit_button.connect_clicked(clone!(
-                        #[strong]
-                        exclude,
-                        #[weak]
-                        window,
-                        move |_| {
-                            let config = BACKUP_CONFIG.load_full();
-                            let Ok(active) = config.active() else {
-                                return;
-                            };
+                // Edit patterns
+                edit_button.connect_clicked(clone!(
+                    #[strong]
+                    exclude,
+                    #[weak]
+                    window,
+                    move |_| {
+                        let config = BACKUP_CONFIG.load_full();
+                        let Ok(active) = config.active() else {
+                            return;
+                        };
 
-                            let dialog = ExcludeDialog::new(active);
-                            dialog.present_edit_exclude(&window, exclude.clone());
-                        }
-                    ));
+                        let dialog = ExcludeDialog::new(active);
+                        dialog.present_edit_exclude(&window, exclude.clone());
+                    }
+                ));
 
-                    row.add_suffix(&edit_button);
-                }
+                row.add_suffix(&edit_button);
             }
 
             let delete_button = gtk::Button::builder()
@@ -184,17 +182,17 @@ impl imp::BackupPage {
     }
 
     pub fn refresh_status(&self) {
-        if self.obj().is_visible() {
-            if let Some(id) = ACTIVE_BACKUP_ID.load().as_ref().as_ref() {
-                let display = backup_status::Display::new_from_id(id);
-                self.refresh_status_display(&display);
+        if self.obj().is_visible()
+            && let Some(id) = ACTIVE_BACKUP_ID.load().as_ref().as_ref()
+        {
+            let display = backup_status::Display::new_from_id(id);
+            self.refresh_status_display(&display);
 
-                if self.detail_dialog.is_mapped() {
-                    self.detail_dialog.refresh_status_display(&display);
-                }
-
-                self.backup_status.replace(Some(display));
+            if self.detail_dialog.is_mapped() {
+                self.detail_dialog.refresh_status_display(&display);
             }
+
+            self.backup_status.replace(Some(display));
         }
     }
 

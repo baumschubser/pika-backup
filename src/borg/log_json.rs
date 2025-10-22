@@ -2,8 +2,9 @@
 Borg output to STDERR with `--log-json` flag.
 */
 
-use crate::prelude::*;
 use std::fmt;
+
+use crate::prelude::*;
 
 /// All possible output
 #[derive(Clone, Debug)]
@@ -80,7 +81,7 @@ impl fmt::Display for ProgressArchive {
             "{}",
             gettextf(
                 "Backed up data: {}",
-                &[&glib::format_size(self.original_size)]
+                [&glib::format_size(self.original_size)]
             )
         )
     }
@@ -110,7 +111,7 @@ impl fmt::Display for ProgressPercent {
                 gettextf(
                     // xgettext:no-c-format
                     "Operation {} % completed ({}/{})",
-                    &[
+                    [
                         &format!("{percent:.0}"),
                         &current.to_string(),
                         &total.to_string()
@@ -216,7 +217,7 @@ impl fmt::Display for Operation {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct QuestionPrompt {
     #[serde(default)]
     msgid: QuestionId,
@@ -237,37 +238,43 @@ impl QuestionPrompt {
                 gettext("Attempting to access a previously unknown unencrypted repository.")
             }
             QuestionId::RelocatedRepoAccessIsOk => {
-                let pattern: regex::Regex = regex::Regex::new(
-                    r".*at location (\S+) .*previously located at (\S+).*",
-                )
-                .expect("Regex to be valid");
+                let pattern: regex::Regex =
+                    regex::Regex::new(r".*at location (\S+) .*previously located at (\S+).*")
+                        .expect("Regex to be valid");
 
-                let locations = if let Some(captures) = pattern.captures(&self.message).ok().flatten() {
-                    (captures.get(1), captures.get(2))
-                } else {
-                    (None, None)
-                };
+                let locations =
+                    if let Some(captures) = pattern.captures(&self.message).ok().flatten() {
+                        (captures.get(1), captures.get(2))
+                    } else {
+                        (None, None)
+                    };
 
                 if let (Some(current), Some(previous)) = locations {
                     gettextf(
                         "The backup repository at location “{}” was previously located at “{}”.",
-                        &[current.as_str(), previous.as_str()],
+                        [current.as_str(), previous.as_str()],
                     )
                 } else {
                     gettext("The backup repository was previously located at a different location.")
                 }
             }
-            QuestionId::CheckIKnowWhatIAmDoing => gettext("This is a potentially dangerous function. Repairing a repository might lead to data loss (for kinds of corruption it is not capable of dealing with). BE VERY CAREFUL!"),
-            QuestionId::DeleteIKnowWhatIAmDoing => gettext("You requested to delete the repository completely, including all backup archives it contains."),
-            QuestionId::Unknown => gettextf("Unexpected question from borgbackup: “{}”", &[&self.message]),
+            QuestionId::CheckIKnowWhatIAmDoing => gettext(
+                "This is a potentially dangerous function. Repairing a repository might lead to data loss (for kinds of corruption it is not capable of dealing with). BE VERY CAREFUL!",
+            ),
+            QuestionId::DeleteIKnowWhatIAmDoing => gettext(
+                "You requested to delete the repository completely, including all backup archives it contains.",
+            ),
+            QuestionId::Unknown => {
+                gettextf("Unexpected question from borgbackup: “{}”", [&self.message])
+            }
         };
 
         // Translators: Combines statement from above and this question
-        gettextf("{}\n\nDo you want to continue?", &[&msg])
+        gettextf("{}\n\nDo you want to continue?", [&msg])
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum QuestionId {
     #[serde(rename = "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK")]
@@ -345,8 +352,8 @@ pub enum LogEntry {
 impl LogEntry {
     pub fn message(&self) -> String {
         match &self {
-            Self::ParsedErr(LogMessage { ref message, .. }) => message.to_string(),
-            Self::UnparsableErr(ref message) => message.to_string(),
+            Self::ParsedErr(LogMessage { message, .. }) => message.to_string(),
+            Self::UnparsableErr(message) => message.to_string(),
         }
     }
 
@@ -365,10 +372,10 @@ impl LogEntry {
     }
 
     pub fn has_borg_msgid(&self, msgid_needle: &MsgId) -> bool {
-        if let Self::ParsedErr(x) = self {
-            if x.msgid == *msgid_needle {
-                return true;
-            }
+        if let Self::ParsedErr(x) = self
+            && x.msgid == *msgid_needle
+        {
+            return true;
         }
 
         false

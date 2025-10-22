@@ -1,16 +1,14 @@
-use crate::borg;
-use crate::config;
-use crate::ui;
-use crate::ui::prelude::*;
-use crate::ui::utils;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use config::TrackChanges;
 
 use super::shell;
 use super::widget::setup::SetupDialog;
-use super::widget::AppWindow;
-use super::widget::PreferencesDialog;
+use super::widget::{AppWindow, PreferencesDialog};
+use crate::ui::prelude::*;
+use crate::ui::utils;
+use crate::ui::widget::UnmountArchives;
+use crate::{config, ui};
 
 mod imp {
     use std::cell::Cell;
@@ -67,6 +65,7 @@ mod imp {
 
             glib::MainContext::default().spawn_local(async {
                 ui::dbus::init().await;
+                ui::utils::borg::cleanup_repo_mounts().await;
             });
 
             // init status tracking
@@ -88,25 +87,13 @@ mod imp {
             self.in_shutdown.set(true);
             self.obj().notify_in_shutdown();
 
-            let result = async_std::task::block_on(BACKUP_HISTORY.try_update(|histories| {
+            let result = smol::block_on(BACKUP_HISTORY.try_update(|histories| {
                 config::Histories::handle_shutdown(histories);
                 Ok(())
             }));
 
             if let Err(err) = result {
                 error!("Failed to write config during shutdown: {}", err);
-            }
-
-            while !ACTIVE_MOUNTS.load().is_empty() {
-                async_std::task::block_on(async {
-                    for repo_id in ACTIVE_MOUNTS.load().iter() {
-                        if borg::functions::umount(repo_id).await.is_ok() {
-                            ACTIVE_MOUNTS.update(|mounts| {
-                                mounts.remove(repo_id);
-                            });
-                        }
-                    }
-                })
             }
 
             debug!("App::shutdown finished");
@@ -117,12 +104,13 @@ mod imp {
 
     impl App {
         pub(super) fn main_window(&self) -> AppWindow {
-            if let Some(window) = self.main_window.upgrade() {
-                window
-            } else {
-                let window = AppWindow::new(&self.obj());
-                self.main_window.set(Some(&window));
-                window
+            match self.main_window.upgrade() {
+                Some(window) => window,
+                _ => {
+                    let window = AppWindow::new(&self.obj());
+                    self.main_window.set(Some(&window));
+                    window
+                }
             }
         }
     }
@@ -182,11 +170,11 @@ impl App {
                 .build(),
             gio::ActionEntryBuilder::new("backup-preferences")
                 .activate(|app: &Self, _, _| {
-                    if let Some(id) = &**ui::ACTIVE_BACKUP_ID.load() {
-                        if app.main_window().page_detail().is_visible() {
-                            // Only display when the backup detail page is open
-                            PreferencesDialog::new(id.clone()).present(Some(&app.main_window()));
-                        }
+                    if let Some(id) = &**ui::ACTIVE_BACKUP_ID.load()
+                        && app.main_window().page_detail().is_visible()
+                    {
+                        // Only display when the backup detail page is open
+                        PreferencesDialog::new(id.clone()).present(Some(&app.main_window()));
                     }
                 })
                 .build(),
@@ -234,10 +222,19 @@ impl App {
 
     pub async fn try_quit(&self) -> Result<()> {
         debug!("App::try_quit");
+
+        let dialog = UnmountArchives::new();
+        dialog.execute(&self.main_window()).await?;
+
+        if BACKUP_HISTORY.load().iter().any(|(_, x)| x.is_browsing()) {
+            debug!("Some archives are still mounted for browsing.");
+        } else {
+            debug!("No archives mounted for browsing");
+        }
+
         if utils::borg::is_borg_operation_running() {
             if self.main_window().is_visible() {
                 let permission = utils::background_permission().await;
-
                 match permission {
                     Ok(()) => {
                         debug!("Hiding main window as backup is currently running");

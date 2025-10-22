@@ -1,17 +1,17 @@
-use crate::ui;
-use ui::config;
-use ui::prelude::*;
-
 use std::collections::BTreeSet;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use ui::config;
+use ui::prelude::*;
+
+use crate::ui;
 
 mod imp {
     use std::cell::{OnceCell, RefCell};
 
-    use self::ui::{error::HandleError, App};
-
+    use self::ui::App;
+    use self::ui::error::HandleError;
     use super::*;
 
     #[derive(Default, glib::Properties, gtk::CompositeTemplate)]
@@ -147,7 +147,8 @@ mod imp {
             let exclude = &config.exclude;
 
             let histories = BACKUP_HISTORY.load();
-            // If the history is missing we don't have any suggested excludes and shouldn't fail
+            // If the history is missing we don't have any suggested excludes and shouldn't
+            // fail
             let suggested_excludes = histories.active().ok().and_then(|history| {
                 history.suggested_excludes_with_reason(
                     config::history::SuggestedExcludeReason::PermissionDenied,
@@ -236,13 +237,12 @@ mod imp {
             }
 
             // Make sure this is a directory, not a file
-            if let Some(base_path) = &base {
-                if async_std::fs::metadata(base_path)
+            if let Some(base_path) = &base
+                && smol::fs::metadata(base_path)
                     .await
                     .is_ok_and(|meta| meta.is_file())
-                {
-                    base = base_path.parent().map(|p| p.to_path_buf())
-                }
+            {
+                base = base_path.parent().map(|p| p.to_path_buf())
             }
 
             Ok(gio::File::for_path(base.unwrap_or_else(glib::home_dir)))

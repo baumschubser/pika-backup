@@ -1,10 +1,11 @@
-use crate::prelude::*;
-
-use super::{absolute, display_path};
-use serde::Deserialize;
 use std::ffi::{CString, OsString};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+use super::{absolute, display_path};
+use crate::prelude::*;
 
 pub const RELATIVE: bool = false;
 pub const ABSOLUTE: bool = true;
@@ -214,13 +215,12 @@ impl<const T: bool> Pattern<T> {
                     path = stripped.to_path_buf();
                 }
 
-                if let (Ok(pattern), Ok(path)) = (
+                match (
                     CString::new(bytes),
                     CString::new(path.as_os_str().as_bytes()),
                 ) {
-                    crate::utils::posix_fnmatch(&pattern, &path)
-                } else {
-                    false
+                    (Ok(pattern), Ok(path)) => crate::utils::posix_fnmatch(&pattern, &path),
+                    _ => false,
                 }
             }
             Self::PathPrefix(path_prefix) => path.starts_with(absolute(path_prefix)),

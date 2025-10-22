@@ -1,13 +1,15 @@
-use crate::ui::prelude::*;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 
+use crate::ui::prelude::*;
+
 mod imp {
-    use super::*;
+    use std::cell::RefCell;
 
     use glib::Properties;
     use gtk::CompositeTemplate;
-    use std::cell::RefCell;
+
+    use super::*;
 
     #[derive(Default, CompositeTemplate, Properties)]
     #[template(file = "folder_row.ui")]
@@ -44,10 +46,9 @@ mod imp {
                 #[strong(rename_to = obj)]
                 self.obj(),
                 async move {
-                    let preselect = if let Some(file) = obj.file() {
-                        file
-                    } else {
-                        gio::File::for_path(glib::home_dir())
+                    let preselect = match obj.file() {
+                        Some(file) => file,
+                        _ => gio::File::for_path(glib::home_dir()),
                     };
 
                     let file = crate::ui::utils::folder_chooser_dialog(

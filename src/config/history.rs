@@ -1,12 +1,14 @@
-use crate::borg;
-use crate::borg::log_json::LogCollection;
-use crate::config;
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
+use std::hash::Hash;
+
+use chrono::prelude::*;
 
 use super::Loadable;
-
+use crate::borg::RepoId;
+use crate::borg::log_json::LogCollection;
+use crate::config::Backups;
 use crate::prelude::*;
-use chrono::prelude::*;
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use crate::{borg, config};
 
 const HISTORY_LENGTH: usize = 10;
 
@@ -24,13 +26,15 @@ pub struct History {
     /// Last runs, latest run first
     run: VecDeque<RunInfo>,
     running: Option<Running>,
+    browsing: Option<Browsing>,
     last_completed: Option<RunInfo>,
 
     /// Last borg check result
     #[serde(default)]
     last_check: Option<CheckRunInfo>,
 
-    // The excludes suggested from the last size estimate. Will be overwritten every time a size estimate is performed.
+    // The excludes suggested from the last size estimate. Will be overwritten every time a size
+    // estimate is performed.
     #[serde(default)]
     suggested_exclude:
         BTreeMap<SuggestedExcludeReason, BTreeSet<config::Exclude<{ config::RELATIVE }>>>,
@@ -63,6 +67,10 @@ impl History {
 
     pub fn is_running(&self) -> bool {
         self.running.is_some()
+    }
+
+    pub fn is_browsing(&self) -> bool {
+        self.browsing.is_some()
     }
 
     pub fn last_completed(&self) -> Option<&RunInfo> {
@@ -141,11 +149,12 @@ impl LookupConfigId for crate::config::Histories {
 }
 
 impl Histories {
-    /// Loads a history file. The individual history entries are truncated via [`History::cleanup`]
-    /// and then returned.
+    /// Loads a history file. The individual history entries are truncated via
+    /// [`History::cleanup`] and then returned.
     ///
-    /// All histories that are not associated with a backup config from `valid_config_ids` will be
-    /// discarded to ensure we don't store backup data from long-gone backup configs.
+    /// All histories that are not associated with a backup config from
+    /// `valid_config_ids` will be discarded to ensure we don't store backup
+    /// data from long-gone backup configs.
     pub fn from_file_ui(
         valid_config_ids: &BTreeSet<ConfigId>,
     ) -> std::io::Result<super::Writeable<Self>> {
@@ -177,6 +186,10 @@ impl Histories {
                 history.running = None;
                 history.run.truncate(HISTORY_LENGTH);
             }
+
+            if history.browsing.is_some() {
+                history.browsing = None;
+            }
         }
     }
 
@@ -206,6 +219,49 @@ impl Histories {
         let history = self.0.entry(config_id).or_default();
 
         history.running = None;
+    }
+
+    pub fn set_browsing(&mut self, config_id: ConfigId) {
+        debug!("Set {:?} to state browsing.", config_id);
+        let history = self.0.entry(config_id).or_default();
+
+        history.browsing = Some(Browsing {
+            start: Local::now(),
+        });
+    }
+
+    pub fn remove_browsing(&mut self, config_id: ConfigId) {
+        debug!("Set {:?} to state not browsing", config_id);
+        let history = self.0.entry(config_id).or_default();
+
+        history.browsing = None;
+    }
+
+    pub fn browsing_repo_ids(&self, configs: &Backups) -> HashSet<RepoId> {
+        let config_ids = self
+            .0
+            .iter()
+            .filter(|(_, history)| history.browsing.is_some())
+            .map(|(config_id, _)| config_id)
+            .collect::<Vec<_>>();
+
+        let repo_ids = configs
+            .iter()
+            .filter(|x| config_ids.contains(&&x.id))
+            .map(|x| &x.repo_id);
+
+        HashSet::from_iter(repo_ids.cloned())
+    }
+
+    pub fn browsing_config_ids(&self, configs: &Backups) -> HashSet<ConfigId> {
+        let repos = self.browsing_repo_ids(configs);
+
+        HashSet::from_iter(
+            configs
+                .iter()
+                .filter_map(|x| repos.contains(&x.repo_id).then_some(&x.id))
+                .cloned(),
+        )
     }
 
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, config::ConfigId, History> {
@@ -279,6 +335,11 @@ impl RunInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Running {
+    pub start: DateTime<Local>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Browsing {
     pub start: DateTime<Local>,
 }
 

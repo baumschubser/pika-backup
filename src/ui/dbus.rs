@@ -1,8 +1,7 @@
-use crate::ui::prelude::*;
-use async_std::prelude::*;
+use smol::channel::Sender;
 
 use crate::schedule;
-use async_std::channel::Sender;
+use crate::ui::prelude::*;
 
 struct PikaBackup {
     command: Sender<Command>,
@@ -69,11 +68,11 @@ pub async fn init() {
 }
 
 async fn spawn_command_listener() -> Sender<Command> {
-    let (sender, mut receiver) = async_std::channel::unbounded();
+    let (sender, receiver) = smol::channel::unbounded();
 
     Handler::run(async move {
         debug!("Internally awaiting D-Bus API commands");
-        while let Some(command) = receiver.next().await {
+        while let Ok(command) = receiver.recv().await {
             debug!("Received D-Bus API command {command:?}");
             match command {
                 Command::StartBackup(config_id, due_cause) => {
@@ -100,7 +99,7 @@ async fn spawn_command_listener() -> Sender<Command> {
 
 /// Session Bus
 pub async fn session_connection() -> zbus::Result<zbus::Connection> {
-    static CONNECTION: async_lock::Mutex<Option<zbus::Connection>> = async_lock::Mutex::new(None);
+    static CONNECTION: smol::lock::Mutex<Option<zbus::Connection>> = smol::lock::Mutex::new(None);
 
     let mut connection = CONNECTION.lock().await;
 
@@ -108,7 +107,7 @@ pub async fn session_connection() -> zbus::Result<zbus::Connection> {
         Ok(connection.clone())
     } else {
         let command = spawn_command_listener().await;
-        let new_connection = zbus::ConnectionBuilder::session()?
+        let new_connection = zbus::connection::Builder::session()?
             .name(crate::DBUS_API_NAME)?
             .serve_at(crate::DBUS_API_PATH, PikaBackup { command })?
             .build()

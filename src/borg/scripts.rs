@@ -239,7 +239,7 @@ pub async fn run_script(
     );
 
     let mut cmd = if *APP_IS_SANDBOXED {
-        let mut cmd = async_std::process::Command::new("flatpak-spawn");
+        let mut cmd = async_process::Command::new("flatpak-spawn");
 
         // Don't remove the entire env, flatpak-spawn needs some of it
         // Prevents debug logging to influence flatpak-spawn output
@@ -255,7 +255,7 @@ pub async fn run_script(
         cmd.args(["--host", "bash", "-c", command]);
         cmd
     } else {
-        let mut cmd = async_std::process::Command::new("bash");
+        let mut cmd = async_process::Command::new("bash");
 
         cmd.envs(envs);
 
@@ -273,11 +273,11 @@ pub async fn run_script(
                 match kind {
                     UserScriptKind::PreBackup => Error::from(gettextf(
                         "The pre-backup command configured in preferences failed to run.\n{}",
-                        &[&format!("{:?}", e)],
+                        [&format!("{:?}", e)],
                     )),
                     UserScriptKind::PostBackup => Error::from(gettextf(
                         "The post-backup command configured in preferences failed to run.\n{}",
-                        &[&format!("{:?}", e)],
+                        [&format!("{:?}", e)],
                     )),
                     UserScriptKind::PostEverything => Error::from(gettextf(
                         "The post-everything command configured in preferences failed to run.\n{}",
@@ -307,11 +307,11 @@ pub async fn run_script(
         let mut msg = match kind {
             UserScriptKind::PreBackup => gettextf(
                 "The pre-backup command configured in preferences returned a failure code: {}",
-                &[&return_code.to_string()],
+                [&return_code.to_string()],
             ),
             UserScriptKind::PostBackup => gettextf(
                 "The post-backup command configured in preferences returned a failure code: {}",
-                &[&return_code.to_string()],
+                [&return_code.to_string()],
             ),
             UserScriptKind::PostEverything => gettextf(
                 "The post-prune command configured in preferences returned a failure code: {}",

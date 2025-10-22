@@ -1,7 +1,7 @@
-use super::{ConfigType, Loadable};
-
-use crate::config;
 use arc_swap::ArcSwap;
+
+use super::{ConfigType, Loadable};
+use crate::config;
 
 #[derive(Default)]
 pub struct Writeable<C> {
@@ -73,7 +73,7 @@ where
             std::fs::create_dir_all(&dir)?;
 
             let current_config = self.current_config.clone();
-            async_std::task::spawn_blocking(move || {
+            smol::unblock(move || {
                 let config_file = tempfile::NamedTempFile::new_in(dir)?;
                 debug!("Writing new file to {:?}", config_file);
 
@@ -112,8 +112,10 @@ where
 {
     /// Write the file asynchronously
     ///
-    /// After this function has completed there are one of two possible outcomes:
-    /// - The file was written successfully, and written_config contains the data that is currently on disk
+    /// After this function has completed there are one of two possible
+    /// outcomes:
+    /// - The file was written successfully, and written_config contains the
+    ///   data that is currently on disk
     /// - An error occurred and the config is unchanged
     async fn write_file(&self) -> Result<(), std::io::Error> {
         let mut cur = self.load();

@@ -1,13 +1,13 @@
-use crate::ui::prelude::*;
 use adw::subclass::prelude::*;
 
 use super::ArchiveParams;
+use crate::ui::prelude::*;
 
 mod imp {
 
-    use crate::ui::{self, widget::WrapBox};
-
     use super::*;
+    use crate::ui::widget::WrapBox;
+    use crate::ui::{self};
 
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "transfer_option.ui")]
@@ -75,7 +75,7 @@ mod imp {
 glib::wrapper! {
     pub struct SetupTransferOption(ObjectSubclass<imp::SetupTransferOption>)
     @extends gtk::ListBoxRow, gtk::Widget,
-    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Actionable;
 }
 
 impl SetupTransferOption {

@@ -2,15 +2,14 @@ mod archives;
 mod backup;
 mod schedule;
 
-pub use archives::ArchivesPage;
-pub use backup::BackupPage;
-pub use schedule::{
-    frequency, prune_preset, status::Status as ScheduleStatus, weekday, SchedulePage,
-};
-
-use crate::ui::prelude::*;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+pub use archives::ArchivesPage;
+pub use backup::BackupPage;
+pub use schedule::status::Status as ScheduleStatus;
+pub use schedule::{SchedulePage, frequency, prune_preset, weekday};
+
+use crate::ui::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DetailPageKind {
@@ -22,9 +21,8 @@ pub enum DetailPageKind {
 mod imp {
     use std::cell::Cell;
 
-    use crate::ui::widget::{ArchivesPage, BackupPage, SchedulePage};
-
     use super::*;
+    use crate::ui::widget::{ArchivesPage, BackupPage, SchedulePage};
 
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "detail.ui")]
@@ -65,7 +63,8 @@ mod imp {
             let imp = self.ref_counted();
 
             glib::timeout_add_local_once(std::time::Duration::ZERO, move || {
-                // TODO: This should be run directly, but as long as we need main_ui we need to do it later to prevent recursion
+                // TODO: This should be run directly, but as long as we need main_ui we need to
+                // do it later to prevent recursion
                 imp.on_visible_child_notify();
                 main_ui().navigation_view().connect_pushed(glib::clone!(
                     #[weak]
@@ -78,10 +77,9 @@ mod imp {
 
     impl WidgetImpl for DetailPage {
         fn grab_focus(&self) -> bool {
-            if let Some(child) = self.detail_stack.visible_child() {
-                child.grab_focus()
-            } else {
-                self.parent_grab_focus()
+            match self.detail_stack.visible_child() {
+                Some(child) => child.grab_focus(),
+                _ => self.parent_grab_focus(),
             }
         }
     }

@@ -1,9 +1,10 @@
-use crate::prelude::*;
-use gio::prelude::*;
-
-use arc_swap::ArcSwap;
 use std::cell::Cell;
 use std::sync::LazyLock;
+
+use arc_swap::ArcSwap;
+use gio::prelude::*;
+
+use crate::prelude::*;
 
 pub trait Loadable: Sized {
     fn from_file() -> Result<Self, std::io::Error>;
@@ -15,11 +16,11 @@ impl<C: ConfigType + ConfigVersion + serde::de::DeserializeOwned + Default> Load
         info!("Loading file {:?}", path);
 
         let file_result = std::fs::File::open(&path);
-        if let Err(err) = &file_result {
-            if matches!(err.kind(), std::io::ErrorKind::NotFound) {
-                info!("File not found. Using default value.");
-                return Ok(Default::default());
-            }
+        if let Err(err) = &file_result
+            && matches!(err.kind(), std::io::ErrorKind::NotFound)
+        {
+            info!("File not found. Using default value.");
+            return Ok(Default::default());
         }
 
         let file = file_result?;
@@ -34,7 +35,13 @@ impl<C: ConfigType + ConfigVersion + serde::de::DeserializeOwned + Default> Load
             Ok(serde_json::from_value(json)?)
         } else {
             // The config is incompatible with this app version
-            Err(std::io::Error::new(std::io::ErrorKind::InvalidData, gettextf("The loaded configuration file version {} is incompatible with this version of Pika Backup", &[&version.to_string()])))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                gettextf(
+                    "The loaded configuration file version {} is incompatible with this version of Pika Backup",
+                    [&version.to_string()],
+                ),
+            ))
         }
     }
 }
@@ -110,11 +117,14 @@ pub trait ConfigType {
 
 /// This trait needs to be implemented for all config files
 ///
-/// The default implementation considers all versions valid <= current config version
+/// The default implementation considers all versions valid <= current config
+/// version
 pub trait ConfigVersion {
-    /// Whether the version on disk is read-compatible with this version of the app
+    /// Whether the version on disk is read-compatible with this version of the
+    /// app
     ///
-    /// Unless the on-disk version is newer than our latest version this is assumed to be true
+    /// Unless the on-disk version is newer than our latest version this is
+    /// assumed to be true
     fn version_compatible(version: u64) -> bool {
         version <= super::VERSION
     }

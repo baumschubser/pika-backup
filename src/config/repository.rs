@@ -1,8 +1,7 @@
-use crate::prelude::*;
 use gio::prelude::*;
 
-use super::BackupSettings;
-use super::{local, remote};
+use super::{BackupSettings, local, remote};
+use crate::prelude::*;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, glib::Boxed)]
 #[boxed_type(name = "PkRepositoryConfig", nullable)]
@@ -13,9 +12,9 @@ pub enum Repository {
 }
 
 async fn ssh_host_lookup(host: &str) -> String {
-    let result = async_std::process::Command::new("ssh")
+    let result = async_process::Command::new("ssh")
         .args(["-G", host])
-        .stdout(async_std::process::Stdio::piped())
+        .stdout(async_process::Stdio::piped())
         .output()
         .await;
 
@@ -39,23 +38,21 @@ impl Repository {
                 let uri = glib::Uri::parse(local.uri.as_ref()?, glib::UriFlags::NONE).ok()?;
 
                 if ["sftp", "ssh"].contains(&uri.scheme().as_str()) {
-                    if let Some(host) = uri.host() {
-                        Some(ssh_host_lookup(&host).await)
-                    } else {
-                        None
+                    match uri.host() {
+                        Some(host) => Some(ssh_host_lookup(&host).await),
+                        _ => None,
                     }
                 } else {
                     uri.host().as_deref().map(str::to_string)
                 }
             }
             Self::Remote(remote) => {
-                if let Some(host) = glib::Uri::parse(&remote.uri, glib::UriFlags::NONE)
+                match glib::Uri::parse(&remote.uri, glib::UriFlags::NONE)
                     .ok()?
                     .host()
                 {
-                    Some(ssh_host_lookup(&host).await)
-                } else {
-                    None
+                    Some(host) => Some(ssh_host_lookup(&host).await),
+                    _ => None,
                 }
             }
         }
@@ -74,10 +71,9 @@ impl Repository {
     }
 
     pub async fn is_internet(&self) -> bool {
-        if let Some(host_address) = self.host_address().await {
-            !host_address.is_site_local()
-        } else {
-            false
+        match self.host_address().await {
+            Some(host_address) => !host_address.is_site_local(),
+            _ => false,
         }
     }
 

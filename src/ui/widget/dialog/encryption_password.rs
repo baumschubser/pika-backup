@@ -1,8 +1,8 @@
-use crate::config;
-use crate::ui::prelude::*;
-
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+
+use crate::config;
+use crate::ui::prelude::*;
 
 mod imp {
     use super::*;
@@ -59,7 +59,7 @@ impl EncryptionPasswordDialog {
     ) -> Option<config::Password> {
         let mut body = gettextf(
             "The operation “{}” requires the encryption password of the repository on “{}”.",
-            &[purpose, &repo.location()],
+            [purpose, &repo.location()],
         );
 
         if let Some(keyring_error) = &keyring_error {

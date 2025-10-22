@@ -1,7 +1,8 @@
 //! Extract information from previous borg run command lines
-use crate::config;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+
+use crate::config;
 
 #[derive(Clone, Debug)]
 enum CreateTerm {
@@ -80,10 +81,10 @@ pub fn parse(cmd: Vec<String>) -> Parsed {
             CreateTerm::OptExclude => {
                 if let Some((CreateTerm::Value, value)) = options.next() {
                     // TODO: why what?
-                    if !value.ends_with(&format!(".var/app/{}/data/flatpak/", crate::APP_ID)) {
-                        if let Some(pattern) = config::Pattern::from_borg(value) {
-                            exclude_rules.insert(config::exclude::Rule::Pattern(pattern));
-                        }
+                    if !value.ends_with(&format!(".var/app/{}/data/flatpak/", crate::APP_ID))
+                        && let Some(pattern) = config::Pattern::from_borg(value)
+                    {
+                        exclude_rules.insert(config::exclude::Rule::Pattern(pattern));
                     }
                 }
             }

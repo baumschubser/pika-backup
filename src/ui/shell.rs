@@ -1,14 +1,16 @@
-use super::prelude::*;
-use arc_swap::ArcSwap;
 use std::sync::LazyLock;
+
+use arc_swap::ArcSwap;
+
+use super::prelude::*;
 
 static LAST_MESSAGE: LazyLock<ArcSwap<Option<String>>> =
     LazyLock::new(|| ArcSwap::new(Default::default()));
 
 async fn proxy() -> Option<Arc<ashpd::desktop::background::BackgroundProxy<'static>>> {
-    static PROXY: async_lock::Mutex<
+    static PROXY: smol::lock::Mutex<
         Option<Arc<ashpd::desktop::background::BackgroundProxy<'static>>>,
-    > = async_lock::Mutex::new(None);
+    > = smol::lock::Mutex::new(None);
 
     let mut proxy = PROXY.lock().await;
 
@@ -42,10 +44,10 @@ pub async fn set_status_message(message: &str) {
             return;
         }
 
-        if let Some(proxy) = proxy().await {
-            if let Err(err) = proxy.set_status(&ellipsized_message).await {
-                debug!("Error setting background status: {err:?}");
-            }
+        if let Some(proxy) = proxy().await
+            && let Err(err) = proxy.set_status(&ellipsized_message).await
+        {
+            debug!("Error setting background status: {err:?}");
         }
     }
 }

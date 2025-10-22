@@ -1,12 +1,15 @@
-use crate::config;
-use crate::ui::prelude::*;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 
+use crate::config;
+use crate::ui::prelude::*;
+
 mod imp {
+    use std::cell::Cell;
+    use std::marker::PhantomData;
+
     use super::*;
     use crate::config;
-    use std::{cell::Cell, marker::PhantomData};
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[template(file = "encryption_settings.ui")]
@@ -127,7 +130,9 @@ mod imp {
         }
 
         fn description(&self) -> String {
-            gettext("The data stored in encrypted backups is password protected. If encryption is used, the password is required for accessing your backups.")
+            gettext(
+                "The data stored in encrypted backups is password protected. If encryption is used, the password is required for accessing your backups.",
+            )
         }
 
         pub fn validated_password(&self) -> Result<Option<config::Password>> {
@@ -165,47 +170,48 @@ mod imp {
             // - 0: no password
             // - 1-4 rather easy to crack, in the order of magnitude of seconds to years
             // - 5 centuries
-            let (score, feedback) = entropy
-                .map(|e| {
-                    let guesses_log10 = e.guesses_log10();
-                    let score = if guesses_log10 < 3. {
-                        // less than a second
-                        1
-                    } else if guesses_log10 < 6. {
-                        // seconds
-                        2
-                    } else if guesses_log10 < 8. {
-                        // minutes
-                        3
-                    } else if guesses_log10 < 10. {
-                        // hours
-                        4
-                    } else if guesses_log10 < 12. {
-                        // days
-                        5
-                    } else if guesses_log10 < 14. {
-                        // months / a few years
-                        6
-                    } else {
-                        // centuries
-                        7
-                    };
+            let (score, feedback) = {
+                let guesses_log10 = entropy.guesses_log10();
+                let score = if guesses_log10 < 3. {
+                    // less than a second
+                    1
+                } else if guesses_log10 < 6. {
+                    // seconds
+                    2
+                } else if guesses_log10 < 8. {
+                    // minutes
+                    3
+                } else if guesses_log10 < 10. {
+                    // hours
+                    4
+                } else if guesses_log10 < 12. {
+                    // days
+                    5
+                } else if guesses_log10 < 14. {
+                    // months / a few years
+                    6
+                } else {
+                    // centuries
+                    7
+                };
 
-                    debug!(
-                        "score: {}, time to crack: {}",
-                        score,
-                        e.crack_times().offline_slow_hashing_1e4_per_second()
-                    );
+                debug!(
+                    "score: {}, time to crack: {}",
+                    score,
+                    entropy.crack_times().offline_slow_hashing_1e4_per_second()
+                );
 
-                    (score, e.feedback().to_owned())
-                })
-                .unwrap_or((0, None));
+                (score, entropy.feedback().to_owned())
+            };
 
             let validation_str = if score == 0 {
-                // Translators: Password feedback: Empty password. All strings labelled like this must fit in a single line at 360 width, to prevent the label from ellipsizing.
+                // Translators: Password feedback: Empty password. All strings labelled like
+                // this must fit in a single line at 360 width, to prevent the label from
+                // ellipsizing.
                 gettext("Enter a password")
             } else if !password_confirm.is_empty() && password != password_confirm {
-                // Translators: Password feedback: The second password is not the same as the first
+                // Translators: Password feedback: The second password is not the same as the
+                // first
                 gettext("Passwords do not match")
             } else if score < 7 {
                 let warning = feedback
@@ -280,7 +286,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct EncryptionSettings(ObjectSubclass<imp::EncryptionSettings>)
-        @extends gtk::Box, gtk::Widget;
+        @extends gtk::Box, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl EncryptionSettings {

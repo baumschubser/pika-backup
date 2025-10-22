@@ -1,14 +1,12 @@
+use std::fmt::Write;
+
 use chrono::prelude::*;
 
-use crate::borg;
-use crate::borg::log_json;
-use crate::borg::Run;
-use crate::config::history;
-use crate::config::*;
-use crate::ui;
+use crate::borg::{Run, log_json};
+use crate::config::{history, *};
 use crate::ui::prelude::*;
 use crate::ui::utils;
-use std::fmt::Write;
+use crate::{borg, ui};
 
 #[derive(Debug)]
 pub struct Display {
@@ -143,7 +141,7 @@ impl From<&history::CheckRunInfo> for Display {
                 if Local::now() - run_info.end > chrono::Duration::days(120) {
                     Self {
                         // Translators: Argument is 'x months ago'
-                        title: gettextf("Successful Integrity Check {}", &[&when]),
+                        title: gettextf("Successful Integrity Check {}", [&when]),
                         subtitle: Some(gettext("Result might be out of date")),
                         graphic: Graphic::WarningIcon("check-round-outline-symbolic".to_string()),
                         progress: None,
@@ -223,16 +221,15 @@ impl From<&ui::operation::Operation<borg::task::Create>> for Display {
                         let mut sub = gettextf(
                             // xgettext:no-c-format
                             "{} % finished",
-                            &[&format!("{:.1}", fraction * 100.0)],
+                            [&format!("{:.1}", fraction * 100.0)],
                         );
 
                         // Do not show estimate when stalled for example
                         if matches!(op.communication().status(), borg::status::Run::Running)
                             && !progress_archive.finished
+                            && let Some(remaining) = status.time_remaining()
                         {
-                            if let Some(remaining) = status.time_remaining() {
-                                let _ = write!(sub, " – {}", utils::duration::left(&remaining));
-                            }
+                            let _ = write!(sub, " – {}", utils::duration::left(&remaining));
                         }
 
                         subtitle = Some(sub);
@@ -251,7 +248,7 @@ impl From<&ui::operation::Operation<borg::task::Create>> for Display {
             Run::Reconnecting(wait_time) => {
                 subtitle = Some(gettextf(
                     "Connection lost, reconnecting in {}",
-                    &[&utils::duration::plain_lowercase(
+                    [&utils::duration::plain_lowercase(
                         &utils::duration::from_std(wait_time),
                     )],
                 ));
@@ -260,10 +257,10 @@ impl From<&ui::operation::Operation<borg::task::Create>> for Display {
             Run::Stopping => gettext("Stopping Backup"),
         };
 
-        if subtitle.is_none() {
-            if let Some(log) = op.last_log() {
-                subtitle = Some(log.to_string());
-            }
+        if subtitle.is_none()
+            && let Some(log) = op.last_log()
+        {
+            subtitle = Some(log.to_string());
         }
 
         Self {

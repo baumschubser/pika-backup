@@ -5,11 +5,14 @@ use crate::config::BackupSettings;
 use crate::ui::prelude::*;
 
 mod imp {
-    use crate::{borg, config::UserScriptKind, ui::widget::EncryptionSettings};
+    use std::cell::{Cell, OnceCell, RefCell};
+
+    use glib::Properties;
 
     use super::*;
-    use glib::Properties;
-    use std::cell::{Cell, OnceCell, RefCell};
+    use crate::borg;
+    use crate::config::UserScriptKind;
+    use crate::ui::widget::EncryptionSettings;
 
     #[derive(Debug, Default, Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::PreferencesDialog)]
@@ -233,7 +236,7 @@ mod imp {
             match self.config() {
                 Ok(backup) => {
                     self.obj().set_config_title(backup.title());
-                    self.title_pref_group.set_description(Some(&gettextf("The title of this backup configuration. Will be displayed as “{}” when left empty.", &[&backup.repo.title_fallback()])));
+                    self.title_pref_group.set_description(Some(&gettextf("The title of this backup configuration. Will be displayed as “{}” when left empty.", [&backup.repo.title_fallback()])));
 
                     self.obj().set_pre_backup_command(
                         backup
@@ -436,15 +439,15 @@ mod imp {
 
             let command = self.obj().pre_backup_command();
 
-            if !command.is_empty() {
-                if let Ok(mut config) = self.config() {
-                    config
-                        .user_scripts
-                        .insert(UserScriptKind::PreBackup, command);
+            if !command.is_empty()
+                && let Ok(mut config) = self.config()
+            {
+                config
+                    .user_scripts
+                    .insert(UserScriptKind::PreBackup, command);
 
-                    self.test_run_script(UserScriptKind::PreBackup, config, None)
-                        .await;
-                }
+                self.test_run_script(UserScriptKind::PreBackup, config, None)
+                    .await;
             }
         }
 
@@ -457,34 +460,34 @@ mod imp {
 
             let command = self.obj().post_backup_command();
 
-            if !command.is_empty() {
-                if let Ok(mut config) = self.config() {
-                    // Check if there is already a last RunInfo, if so, use that one
-                    let run_info = if let Some(run_info) = BACKUP_HISTORY
-                        .load()
-                        .try_get(self.config_id.get().unwrap())
-                        .ok()
-                        .and_then(|history| history.last_completed())
-                    {
-                        run_info.clone()
-                    } else {
-                        // Create one from scratch with random values
-                        crate::config::history::RunInfo::new(
-                            &config,
-                            crate::borg::Outcome::Completed {
-                                stats: crate::borg::Stats::new_example(),
-                            },
-                            Default::default(),
-                        )
-                    };
+            if !command.is_empty()
+                && let Ok(mut config) = self.config()
+            {
+                // Check if there is already a last RunInfo, if so, use that one
+                let run_info = if let Some(run_info) = BACKUP_HISTORY
+                    .load()
+                    .try_get(self.config_id.get().unwrap())
+                    .ok()
+                    .and_then(|history| history.last_completed())
+                {
+                    run_info.clone()
+                } else {
+                    // Create one from scratch with random values
+                    crate::config::history::RunInfo::new(
+                        &config,
+                        crate::borg::Outcome::Completed {
+                            stats: crate::borg::Stats::new_example(),
+                        },
+                        Default::default(),
+                    )
+                };
 
-                    config
-                        .user_scripts
-                        .insert(UserScriptKind::PostBackup, command);
+                config
+                    .user_scripts
+                    .insert(UserScriptKind::PostBackup, command);
 
-                    self.test_run_script(UserScriptKind::PostBackup, config, Some(run_info))
-                        .await;
-                }
+                self.test_run_script(UserScriptKind::PostBackup, config, Some(run_info))
+                    .await;
             }
         }
         
@@ -576,7 +579,9 @@ mod imp {
                 // Ask if we really want to remove the password
                 let dialog = adw::AlertDialog::new(
                     Some(&gettext("Remove Password?")),
-                    Some(&gettext("When encryption is not used, everyone with access to the backup files can read all data"))
+                    Some(&gettext(
+                        "When encryption is not used, everyone with access to the backup files can read all data",
+                    )),
                 );
 
                 dialog.add_responses(&[
@@ -674,7 +679,9 @@ mod imp {
 
 glib::wrapper! {
     pub struct PreferencesDialog(ObjectSubclass<imp::PreferencesDialog>)
-        @extends gtk::Widget, adw::Dialog, adw::PreferencesDialog;
+        @extends gtk::Widget, adw::Dialog, adw::PreferencesDialog,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+
 }
 
 impl PreferencesDialog {

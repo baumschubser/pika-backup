@@ -35,7 +35,7 @@ quick_error! {
             from(err: String) -> (Failure::Other(err))
             display("{}", err)
         }
-        ChannelSend(err: async_std::channel::SendError<super::Update>) { from() }
+        ChannelSend(err: smol::channel::SendError<super::Update>) { from() }
         Aborted(err: Abort) {
             from()
             display("{}", err)
@@ -72,7 +72,8 @@ impl std::convert::TryFrom<LogCollection> for Error {
                         .filter(|x| match x.level() {
                             // SSH error: Broken pipe
                             LogLevel::Error => x.message().contains("[Errno 32] Broken pipe"),
-                            // Will be thrown by borg when the network is disabled manually / the wifi disconnects
+                            // Will be thrown by borg when the network is disabled manually / the
+                            // wifi disconnects
                             LogLevel::Warning => x
                                 .message()
                                 .contains("Remote: Timeout, server borg not responding."),
@@ -150,6 +151,7 @@ pub enum Abort {
     /// Unable to mount / access the repository during setup.
     /// Detailed error message in parameter.
     RepositoryNotAvailable(String),
+    QuestionDuringSchedule(QuestionPrompt),
 }
 
 impl std::fmt::Display for Abort {
@@ -174,22 +176,25 @@ impl std::fmt::Display for Abort {
                 gettext("The program or system seems to have crashed.")
             ),
             Self::UserShellCommand(msg) => {
-                write!(f, "{}", gettextf("{}", &[msg]))
+                write!(f, "{}", gettextf("{}", [msg]))
             }
             Self::RepositoryNotAvailable(msg) => {
                 write!(
                     f,
                     "{}",
-                    gettextf("Unable to access backup repository: {}", &[msg])
+                    gettextf("Unable to access backup repository: {}", [msg])
                 )
             }
+            Abort::QuestionDuringSchedule(_) => todo!(),
         }
     }
 }
 
 /// The borg process has thrown an error that caused the backup to fail
 ///
-/// The borg message ids are annotated with the return codes just to keep them in the same order as the borg docs to make it easier to check if we are missing ids.
+/// The borg message ids are annotated with the return codes just to keep them
+/// in the same order as the borg docs to make it easier to check if we are
+/// missing ids.
 ///
 /// <https://borgbackup.readthedocs.io/en/stable/internals/frontends.html#message-ids>
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -287,32 +292,44 @@ impl std::fmt::Display for Failure {
             Self::RepositoryAlreadyExists => {
                 gettext("A repository already exists at this location.")
             }
-            Self::RepositoryCheckNeeded => gettext("Inconsistencies were detected in the repository. Running a data integrity check is needed."),
+            Self::RepositoryCheckNeeded => gettext(
+                "Inconsistencies were detected in the repository. Running a data integrity check is needed.",
+            ),
             Self::RepositoryDoesNotExist => gettext("No repository exists at this location."),
-            Self::RepositoryInsufficientFreeSpaceError => gettext("Not enough free space in repository."),
+            Self::RepositoryInsufficientFreeSpaceError => {
+                gettext("Not enough free space in repository.")
+            }
             Self::RepositoryInvalidRepository => {
                 gettext("The configured location does not contain a valid repository.")
             }
-            Self::RepositoryInvalidRepositoryConfig => {
-                gettext("The configured location does not contain a valid repository configuration.")
+            Self::RepositoryInvalidRepositoryConfig => gettext(
+                "The configured location does not contain a valid repository configuration.",
+            ),
+            Self::RepositoryParentPathDoesNotExist => {
+                gettext("The configured location does not exist.")
             }
-            Self::RepositoryParentPathDoesNotExist => gettext("The configured location does not exist."),
-            Self::RepositoryPathAlreadyExists => gettext("The selected location does already exist."),
-            Self::RepositoryStorageQuotaExceeded => {
-                gettext("The repositories storage quota has been reached. Try deleting older archives that are no longer needed.")
+            Self::RepositoryPathAlreadyExists => {
+                gettext("The selected location does already exist.")
             }
-            Self::RepositoryPathPermissionDenied => {
-                gettext("Permission to access the configured location has been denied. Check the file permissions.")
-            }
+            Self::RepositoryStorageQuotaExceeded => gettext(
+                "The repositories storage quota has been reached. Try deleting older archives that are no longer needed.",
+            ),
+            Self::RepositoryPathPermissionDenied => gettext(
+                "Permission to access the configured location has been denied. Check the file permissions.",
+            ),
 
             // RC 25+
-            Self::MandatoryFeatureUnsupported | Self::UnsupportedManifestError => {
-                gettext("A newer version of Pika Backup is required to access this repository. The repository uses unsupported features.")
-            }
+            Self::MandatoryFeatureUnsupported | Self::UnsupportedManifestError => gettext(
+                "A newer version of Pika Backup is required to access this repository. The repository uses unsupported features.",
+            ),
 
             // RC 30+
-            Self::ArchiveAlreadyExists => gettext("The selected location already contains a repository."),
-            Self::ArchiveDoesNotExist => gettext("The configured location does not contain an archive."),
+            Self::ArchiveAlreadyExists => {
+                gettext("The selected location already contains a repository.")
+            }
+            Self::ArchiveDoesNotExist => {
+                gettext("The configured location does not contain an archive.")
+            }
 
             // RC 50+
             Self::PassphraseWrong => gettext("Invalid encryption password."),
@@ -331,7 +348,7 @@ impl std::fmt::Display for Failure {
 
             // Manually added data
             Self::ConnectionClosedWithHint_(hint) => {
-                gettextf("Connection closed by remote host: “{}”", &[hint])
+                gettextf("Connection closed by remote host: “{}”", [hint])
             }
 
             // General

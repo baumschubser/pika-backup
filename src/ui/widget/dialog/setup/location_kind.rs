@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use async_std::stream::StreamExt;
+use smol::prelude::*;
 
 use super::{SetupAction, SetupLocationKind};
 use crate::ui;
@@ -11,12 +11,13 @@ use crate::ui::prelude::*;
 const LISTED_URI_SCHEMES: &[&str] = &["file", "smb", "sftp", "ssh"];
 
 mod imp {
+    use std::cell::Cell;
+    use std::sync::OnceLock;
+
     use glib::subclass::Signal;
 
     use self::ui::widget::PkDialogPageImpl;
-
     use super::*;
-    use std::{cell::Cell, sync::OnceLock};
 
     #[derive(Default, glib::Properties, gtk::CompositeTemplate)]
     #[template(file = "location_kind.ui")]
@@ -65,13 +66,15 @@ mod imp {
         fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
             SIGNALS.get_or_init(|| {
-                vec![Signal::builder("continue")
-                    .param_types([
-                        SetupAction::static_type(),
-                        SetupLocationKind::static_type(),
-                        Option::<gio::File>::static_type(),
-                    ])
-                    .build()]
+                vec![
+                    Signal::builder("continue")
+                        .param_types([
+                            SetupAction::static_type(),
+                            SetupLocationKind::static_type(),
+                            Option::<gio::File>::static_type(),
+                        ])
+                        .build(),
+                ]
             })
         }
 
@@ -210,7 +213,7 @@ mod imp {
                 .await;
 
                 let mut paths = Vec::new();
-                if let Ok(mut dirs) = async_std::fs::read_dir(mount_point).await {
+                if let Ok(mut dirs) = smol::fs::read_dir(mount_point).await {
                     while let Some(Ok(path)) = dirs.next().await {
                         if ui::utils::is_backup_repo(path.path().as_ref()).await {
                             paths.push(path.path());
@@ -284,15 +287,15 @@ mod imp {
                     let _ = write!(label1, " – {}", &glib::format_size(df.size));
 
                     label2.push_str(" – ");
-                    label2.push_str(&gettextf("Free space: {}", &[&glib::format_size(df.avail)]));
+                    label2.push_str(&gettextf("Free space: {}", [&glib::format_size(df.avail)]));
                 }
 
                 if let Some(repo_path) = repo {
                     row.set_widget_name(&gio::File::for_path(repo_path).uri());
-                    if let Ok(suffix) = repo_path.strip_prefix(mount_path) {
-                        if !suffix.to_string_lossy().is_empty() {
-                            let _ = write!(label1, " / {}", suffix.display());
-                        }
+                    if let Ok(suffix) = repo_path.strip_prefix(mount_path)
+                        && !suffix.to_string_lossy().is_empty()
+                    {
+                        let _ = write!(label1, " / {}", suffix.display());
                     }
                 }
             }

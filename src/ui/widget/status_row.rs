@@ -1,6 +1,8 @@
-use crate::ui::{backup_status, utils::StatusLevel};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+
+use crate::ui::backup_status;
+use crate::ui::utils::StatusLevel;
 
 mod imp {
     use std::cell::{Cell, RefCell};
@@ -61,7 +63,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct StatusRow(ObjectSubclass<imp::StatusRow>)
-        @extends adw::ActionRow, adw::PreferencesRow, gtk::ListBoxRow, gtk::Widget;
+        @extends adw::ActionRow, adw::PreferencesRow, gtk::ListBoxRow, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Actionable;
 }
 
 impl StatusRow {

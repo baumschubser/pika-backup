@@ -5,8 +5,9 @@ use crate::config;
 use crate::ui::prelude::*;
 
 mod imp {
-    use super::*;
     use std::cell::{OnceCell, RefCell};
+
+    use super::*;
 
     #[derive(Default, glib::Properties, gtk::CompositeTemplate)]
     #[template(file = "device_missing.ui")]
@@ -15,7 +16,7 @@ mod imp {
         #[property(get, set, construct_only)]
         config: OnceCell<crate::config::Backup>,
 
-        mount_sender: RefCell<Option<async_std::channel::Sender<Option<gio::Mount>>>>,
+        mount_sender: RefCell<Option<smol::channel::Sender<Option<gio::Mount>>>>,
 
         #[template_child]
         name_label: TemplateChild<gtk::Label>,
@@ -59,7 +60,7 @@ mod imp {
         pub(super) fn monitor_repo(
             &self,
             repo: &config::local::Repository,
-        ) -> async_std::channel::Receiver<Option<gio::Mount>> {
+        ) -> smol::channel::Receiver<Option<gio::Mount>> {
             self.name_label
                 .set_label(&repo.clone().into_config().location());
 
@@ -75,7 +76,7 @@ mod imp {
 
             let dialog = self.obj();
             let volume_monitor = gio::VolumeMonitor::get();
-            let (mount_sender, mount_receiver) = async_std::channel::unbounded();
+            let (mount_sender, mount_receiver) = smol::channel::unbounded();
             volume_monitor.connect_mount_added(
                 enclose!((dialog, mount_sender, repo) move |_, new_mount| {
                     if let Some(volume) = new_mount.volume() {

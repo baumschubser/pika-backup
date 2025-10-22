@@ -1,7 +1,5 @@
-use crate::borg;
-use crate::config;
-use crate::ui;
 use crate::ui::prelude::*;
+use crate::{borg, config, ui};
 
 pub async fn check(
     config: &config::Backup,
@@ -51,18 +49,18 @@ pub async fn check(
             .await
             .map(|x| x.avail);
 
-        if let Some(space_avail) = space_avail {
-            if estimate.changed > space_avail {
-                let message = gettextf(
-                    "Backup location “{}” might be filling up. Estimated space missing to store all data: {}.",
-                    &[
-                        &config.repo.location(),
-                        &glib::format_size(estimate.changed - space_avail),
-                    ],
-                );
+        if let Some(space_avail) = space_avail
+            && estimate.changed > space_avail
+        {
+            let message = gettextf(
+                "Backup location “{}” might be filling up. Estimated space missing to store all data: {}.",
+                [
+                    config.repo.location().as_str(),
+                    &glib::format_size(estimate.changed - space_avail),
+                ],
+            );
 
-                ui::utils::show_notice(message);
-            }
+            ui::utils::show_notice(message);
         }
     }
 }
